@@ -77,18 +77,31 @@ let score, wave, spawnTimer, waveTimer, gameOver;
 
 // Все скорости теперь в "пикселях/секунду", а не "за кадр" —
 // это делает игру одинаковой по скорости независимо от FPS устройства
-const PLAYER_SPEED = 192;      // было 3.2 * 60
+const PLAYER_SPEED = 280;      // было 192 — прибавили ходу
 const PLAYER_SIZE = 22;
-const BULLET_SPEED = 420;      // было 7 * 60
-const FIRE_RATE = 0.25;        // секунд между выстрелами (было 15 кадров)
-const ENEMY_BASE_SPEED = 72;   // было 1.2 * 60
+const BULLET_SPEED = 550;      // было 420
+const FIRE_RATE = 0.2;         // было 0.25 — стреляем чуть чаще
+const ENEMY_BASE_SPEED = 100;  // было 72
 const ENEMY_SIZE = 20;
 const JOY_RADIUS = 55;
 const CONTACT_DPS = 30;        // урона в секунду при контакте с врагом (было 0.5/кадр)
 const PARTICLE_LIFE = 0.33;    // секунд жизни частицы (было 20 кадров)
 const WAVE_DURATION = 10;      // секунд на волну (было 600 кадров)
+const WALL_THICKNESS = 12;
 
 let lastTime = 0;
+
+// ---------- Мир и камера ----------
+// Мир больше экрана — игрок бегает по нему, камера следует, есть стены-границы.
+let WORLD_W, WORLD_H;
+let camera = { x: 0, y: 0 };
+
+function updateCamera() {
+  camera.x = player.x - W / 2;
+  camera.y = player.y - H / 2;
+  camera.x = Math.max(0, Math.min(WORLD_W - W, camera.x));
+  camera.y = Math.max(0, Math.min(WORLD_H - H, camera.y));
+}
 
 // ---------- Адаптивный размер экрана ----------
 function resizeCanvas() {
@@ -96,9 +109,10 @@ function resizeCanvas() {
   H = window.innerHeight;
   canvas.width = W;
   canvas.height = H;
-  if (player) {
-    player.x = Math.max(PLAYER_SIZE, Math.min(W - PLAYER_SIZE, player.x));
-    player.y = Math.max(PLAYER_SIZE, Math.min(H - PLAYER_SIZE, player.y));
+  if (player && WORLD_W) {
+    player.x = Math.max(PLAYER_SIZE, Math.min(WORLD_W - PLAYER_SIZE, player.x));
+    player.y = Math.max(PLAYER_SIZE, Math.min(WORLD_H - PLAYER_SIZE, player.y));
+    updateCamera();
   }
 }
 window.addEventListener('resize', resizeCanvas);
@@ -106,7 +120,10 @@ window.addEventListener('orientationchange', resizeCanvas);
 
 function init() {
   resizeCanvas();
-  player = { x: W/2, y: H/2, hp: 100, maxHp: 100, fireCooldown: 0 };
+  // мир всегда заметно больше экрана — есть куда бежать до стены
+  WORLD_W = Math.max(2400, Math.round(W * 1.8));
+  WORLD_H = Math.max(1800, Math.round(H * 1.8));
+  player = { x: WORLD_W/2, y: WORLD_H/2, hp: 100, maxHp: 100, fireCooldown: 0 };
   bullets = [];
   enemies = [];
   particles = [];
@@ -115,6 +132,7 @@ function init() {
   spawnTimer = 0;
   waveTimer = 0;
   gameOver = false;
+  updateCamera();
   document.getElementById('gameover').style.display = 'none';
 }
 
@@ -184,10 +202,11 @@ function restart() {
 function spawnEnemy() {
   const side = Math.floor(Math.random() * 4);
   let x, y;
-  if (side === 0) { x = -30; y = Math.random() * H; }
-  else if (side === 1) { x = W + 30; y = Math.random() * H; }
-  else if (side === 2) { x = Math.random() * W; y = -30; }
-  else { x = Math.random() * W; y = H + 30; }
+  const margin = 40;
+  if (side === 0) { x = margin; y = margin + Math.random() * (WORLD_H - margin*2); }
+  else if (side === 1) { x = WORLD_W - margin; y = margin + Math.random() * (WORLD_H - margin*2); }
+  else if (side === 2) { x = margin + Math.random() * (WORLD_W - margin*2); y = margin; }
+  else { x = margin + Math.random() * (WORLD_W - margin*2); y = WORLD_H - margin; }
 
   const speedMult = 1 + (wave - 1) * 0.12;
   enemies.push({
@@ -216,8 +235,9 @@ function update(dt) {
   }
   player.x += dx * PLAYER_SPEED * dt;
   player.y += dy * PLAYER_SPEED * dt;
-  player.x = Math.max(PLAYER_SIZE, Math.min(W - PLAYER_SIZE, player.x));
-  player.y = Math.max(PLAYER_SIZE, Math.min(H - PLAYER_SIZE, player.y));
+  player.x = Math.max(PLAYER_SIZE, Math.min(WORLD_W - PLAYER_SIZE, player.x));
+  player.y = Math.max(PLAYER_SIZE, Math.min(WORLD_H - PLAYER_SIZE, player.y));
+  updateCamera();
 
   // --- автострельба по ближайшему врагу ---
   player.fireCooldown -= dt;
@@ -239,7 +259,7 @@ function update(dt) {
   // --- пули ---
   bullets = bullets.filter(b => {
     b.x += b.vx * dt; b.y += b.vy * dt;
-    return b.x > -10 && b.x < W+10 && b.y > -10 && b.y < H+10;
+    return b.x > -10 && b.x < WORLD_W+10 && b.y > -10 && b.y < WORLD_H+10;
   });
 
   // --- враги: движение к игроку ---
@@ -319,15 +339,25 @@ function spawnParticles(x, y, color) {
 function draw() {
   ctx.clearRect(0, 0, W, H);
 
-  // фон-сетка (заглушка вместо тайлов)
+  ctx.save();
+  ctx.translate(-camera.x, -camera.y);
+
+  // фон-сетка (заглушка вместо тайлов) — рисуем только видимую часть мира, не весь мир целиком
   ctx.strokeStyle = '#1e2030';
   ctx.lineWidth = 1;
-  for (let x = 0; x < W; x += 40) {
-    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+  const gridStartX = Math.floor(camera.x / 40) * 40;
+  const gridStartY = Math.floor(camera.y / 40) * 40;
+  for (let x = gridStartX; x < camera.x + W; x += 40) {
+    ctx.beginPath(); ctx.moveTo(x, camera.y); ctx.lineTo(x, camera.y + H); ctx.stroke();
   }
-  for (let y = 0; y < H; y += 40) {
-    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+  for (let y = gridStartY; y < camera.y + H; y += 40) {
+    ctx.beginPath(); ctx.moveTo(camera.x, y); ctx.lineTo(camera.x + W, y); ctx.stroke();
   }
+
+  // стены-границы мира (заглушка вместо арт-барьера)
+  ctx.strokeStyle = '#e94560';
+  ctx.lineWidth = WALL_THICKNESS;
+  ctx.strokeRect(WALL_THICKNESS/2, WALL_THICKNESS/2, WORLD_W - WALL_THICKNESS, WORLD_H - WALL_THICKNESS);
 
   // частицы
   for (const p of particles) {
@@ -354,7 +384,9 @@ function draw() {
   ctx.fillRect(player.x-6, player.y-4, 3, 3);
   ctx.fillRect(player.x+3, player.y-4, 3, 3);
 
-  // виртуальный джойстик
+  ctx.restore();
+
+  // виртуальный джойстик — рисуется в координатах экрана, камера на него не влияет
   if (joystick.active) {
     ctx.strokeStyle = 'rgba(255,255,255,0.4)';
     ctx.lineWidth = 3;
