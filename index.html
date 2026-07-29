@@ -74,6 +74,7 @@ let W, H;
 let keys = {};
 let player, bullets, enemies, particles;
 let score, wave, spawnTimer, waveTimer, gameOver;
+let plane, pickups, supplyTimer;
 
 // Все скорости теперь в "пикселях/секунду", а не "за кадр" —
 // это делает игру одинаковой по скорости независимо от FPS устройства
@@ -88,8 +89,59 @@ const CONTACT_DPS = 30;        // урона в секунду при конта
 const PARTICLE_LIFE = 0.33;    // секунд жизни частицы (было 20 кадров)
 const WAVE_DURATION = 10;      // секунд на волну (было 600 кадров)
 const WALL_THICKNESS = 12;
+const SUPPLY_INTERVAL = 25;    // секунд между пролётами самолёта
+const PLANE_SPEED = 500;       // пикселей/сек, летит быстро
+const CRATE_SIZE = 26;
+const HEAL_AMOUNT = 35;        // сколько HP восстанавливает аптечка
+const SCORE_PER_SECOND = 12;   // очки начисляются за выживание, не за убийства
 
 let lastTime = 0;
+
+// ---------- Темы/стилистика ----------
+// Вся "визуальная личность" игры вынесена сюда. Пока это только цвета и подписи
+// (заглушки вместо арта) — когда появятся PNG под конкретную тему, сюда же
+// добавятся пути к спрайтам (player, enemy, background, wall, plane), и вся
+// остальная логика останется без изменений — просто будет брать картинки
+// вместо fillRect/цвета.
+const THEMES = {
+  desert: {
+    label: 'Пустыня',
+    enemyLabel: 'Монстр',
+    playerLabel: 'Солдат',
+    playerColor: '#4ecdc4',
+    enemyHueBase: 350,      // базовый оттенок врагов по волнам (текущая палитра)
+    bgColor: '#0d1117',
+    gridColor: '#1e2030',
+    wallColor: '#e94560',
+    crateColor: '#7CFC00'
+  },
+  office: {
+    label: 'Офис',
+    enemyLabel: 'Коллега',
+    playerLabel: 'Новичок',
+    playerColor: '#f4a261',
+    enemyHueBase: 210,
+    bgColor: '#1a1a2e',
+    gridColor: '#2a2a44',
+    wallColor: '#457b9d',
+    crateColor: '#ffd93d'
+  }
+};
+let currentTheme = 'desert';
+
+function switchTheme(name) {
+  if (!THEMES[name]) return;
+  currentTheme = name;
+  canvas.style.background = THEMES[name].bgColor;
+}
+
+// Временная горячая клавиша T — переключает тему для превью,
+// пока нет настоящего экрана настроек. Уберём/заменим на UI позже.
+window.addEventListener('keydown', e => {
+  if (e.key.toLowerCase() === 't') {
+    switchTheme(currentTheme === 'desert' ? 'office' : 'desert');
+  }
+});
 
 // ---------- Мир и камера ----------
 // Мир больше экрана — игрок бегает по нему, камера следует, есть стены-границы.
@@ -120,6 +172,7 @@ window.addEventListener('orientationchange', resizeCanvas);
 
 function init() {
   resizeCanvas();
+  switchTheme(currentTheme);
   // мир всегда заметно больше экрана — есть куда бежать до стены
   WORLD_W = Math.max(2400, Math.round(W * 1.8));
   WORLD_H = Math.max(1800, Math.round(H * 1.8));
@@ -132,6 +185,9 @@ function init() {
   spawnTimer = 0;
   waveTimer = 0;
   gameOver = false;
+  plane = null;
+  pickups = [];
+  supplyTimer = SUPPLY_INTERVAL - 8; // первый самолёт прилетит чуть раньше, чем обычный интервал
   updateCamera();
   document.getElementById('gameover').style.display = 'none';
 }
@@ -198,7 +254,47 @@ function restart() {
   requestAnimationFrame(loop);
 }
 
-// ---------- Спавн врагов ----------
+// ---------- Самолёт со снабжением ----------
+function spawnPlane() {
+  // летит по прямой через весь мир, с одного случайного края до противоположного
+  const horizontal = Math.random() < 0.5;
+  let startX, startY, endX, endY;
+  const margin = 60;
+  if (horizontal) {
+    const y = margin + Math.random() * (WORLD_H - margin*2);
+    const leftToRight = Math.random() < 0.5;
+    startX = leftToRight ? -margin : WORLD_W + margin;
+    endX = leftToRight ? WORLD_W + margin : -margin;
+    startY = y; endY = y;
+  } else {
+    const x = margin + Math.random() * (WORLD_W - margin*2);
+    const topToBottom = Math.random() < 0.5;
+    startY = topToBottom ? -margin : WORLD_H + margin;
+    endY = topToBottom ? WORLD_H + margin : -margin;
+    startX = x; endX = x;
+  }
+  const dist = Math.hypot(endX - startX, endY - startY);
+  const duration = dist / PLANE_SPEED;
+  // ящик падает где-то в середине пролёта (40%-60% пути), чтобы точка сброса была внутри карты
+  const dropProgress = 0.4 + Math.random() * 0.2;
+  plane = {
+    startX, startY, endX, endY, duration,
+    elapsed: 0,
+    x: startX, y: startY,
+    dropProgress,
+    dropped: false,
+    dropX: startX + (endX - startX) * dropProgress,
+    dropY: startY + (endY - startY) * dropProgress
+  };
+}
+
+function collectPickup(p) {
+  if (p.type === 'heal') {
+    player.hp = Math.min(player.maxHp, player.hp + HEAL_AMOUNT);
+  }
+  // сюда позже добавятся типы 'ammo' и 'upgrade', когда появятся сами системы
+  spawnParticles(p.x, p.y, THEMES[currentTheme].crateColor);
+}
 function spawnEnemy() {
   const side = Math.floor(Math.random() * 4);
   let x, y;
@@ -209,11 +305,12 @@ function spawnEnemy() {
   else { x = margin + Math.random() * (WORLD_W - margin*2); y = WORLD_H - margin; }
 
   const speedMult = 1 + (wave - 1) * 0.12;
+  const hueBase = THEMES[currentTheme].enemyHueBase;
   enemies.push({
     x, y,
     hp: 2 + Math.floor(wave / 3),
     speed: ENEMY_BASE_SPEED * speedMult,
-    color: `hsl(${350 - wave * 5}, 70%, 55%)`
+    color: `hsl(${hueBase - wave * 5}, 70%, 55%)`
   });
 }
 
@@ -221,9 +318,11 @@ function spawnEnemy() {
 function update(dt) {
   if (gameOver) return;
 
+  // очки капают каждую секунду просто за то, что вы живы — не за фраги
+  score += SCORE_PER_SECOND * dt;
+
   // --- движение игрока: джойстик (аналог) или клавиатура (цифровое) ---
-  let dx = 0, dy = 0;
-  if (joystick.active) {
+  let dx = 0, dy = 0;  if (joystick.active) {
     dx = joystick.dx; dy = joystick.dy; // уже в диапазоне [-1, 1]
   } else {
     if (keys['w'] || keys['arrowup']) dy -= 1;
@@ -280,7 +379,6 @@ function update(dt) {
         spawnParticles(e.x, e.y, e.color);
         if (e.hp <= 0) {
           enemies.splice(i, 1);
-          score += 10;
         }
         break;
       }
@@ -295,7 +393,7 @@ function update(dt) {
   }
   if (player.hp <= 0) {
     gameOver = true;
-    document.getElementById('finalScore').textContent = score;
+    document.getElementById('finalScore').textContent = Math.floor(score);
     document.getElementById('gameover').style.display = 'block';
   }
 
@@ -318,9 +416,39 @@ function update(dt) {
     waveTimer = 0;
   }
 
+  // --- самолёт со снабжением ---
+  supplyTimer += dt;
+  if (!plane && supplyTimer > SUPPLY_INTERVAL) {
+    spawnPlane();
+    supplyTimer = 0;
+  }
+  if (plane) {
+    plane.elapsed += dt;
+    const progress = plane.elapsed / plane.duration;
+    plane.x = plane.startX + (plane.endX - plane.startX) * progress;
+    plane.y = plane.startY + (plane.endY - plane.startY) * progress;
+    if (!plane.dropped && progress >= plane.dropProgress) {
+      plane.dropped = true;
+      pickups.push({ x: plane.dropX, y: plane.dropY, type: 'heal', bobPhase: 0 });
+    }
+    if (progress >= 1) {
+      plane = null;
+    }
+  }
+
+  // --- ящики: анимация покачивания + подбор игроком ---
+  for (const p of pickups) p.bobPhase += dt * 3;
+  pickups = pickups.filter(p => {
+    if (Math.hypot(p.x - player.x, p.y - player.y) < CRATE_SIZE/2 + PLAYER_SIZE/2) {
+      collectPickup(p);
+      return false;
+    }
+    return true;
+  });
+
   // --- UI ---
   document.getElementById('hp').textContent = Math.max(0, Math.ceil(player.hp));
-  document.getElementById('score').textContent = score;
+  document.getElementById('score').textContent = Math.floor(score);
   document.getElementById('wave').textContent = wave;
 }
 
@@ -343,7 +471,7 @@ function draw() {
   ctx.translate(-camera.x, -camera.y);
 
   // фон-сетка (заглушка вместо тайлов) — рисуем только видимую часть мира, не весь мир целиком
-  ctx.strokeStyle = '#1e2030';
+  ctx.strokeStyle = THEMES[currentTheme].gridColor;
   ctx.lineWidth = 1;
   const gridStartX = Math.floor(camera.x / 40) * 40;
   const gridStartY = Math.floor(camera.y / 40) * 40;
@@ -355,7 +483,7 @@ function draw() {
   }
 
   // стены-границы мира (заглушка вместо арт-барьера)
-  ctx.strokeStyle = '#e94560';
+  ctx.strokeStyle = THEMES[currentTheme].wallColor;
   ctx.lineWidth = WALL_THICKNESS;
   ctx.strokeRect(WALL_THICKNESS/2, WALL_THICKNESS/2, WORLD_W - WALL_THICKNESS, WORLD_H - WALL_THICKNESS);
 
@@ -371,14 +499,50 @@ function draw() {
     ctx.fillRect(b.x-3, b.y-3, 6, 6);
   }
 
+  // ящики со снабжением (заглушка — цветной ромб, покачивается для заметности)
+  for (const p of pickups) {
+    const bob = Math.sin(p.bobPhase) * 4;
+    ctx.save();
+    ctx.translate(p.x, p.y + bob);
+    ctx.rotate(Math.PI / 4);
+    ctx.fillStyle = THEMES[currentTheme].crateColor;
+    ctx.fillRect(-CRATE_SIZE/2, -CRATE_SIZE/2, CRATE_SIZE, CRATE_SIZE);
+    ctx.strokeStyle = '#0d1117';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(-CRATE_SIZE/2, -CRATE_SIZE/2, CRATE_SIZE, CRATE_SIZE);
+    ctx.restore();
+  }
+
   // враги
   for (const e of enemies) {
     ctx.fillStyle = e.color;
     ctx.fillRect(e.x - ENEMY_SIZE/2, e.y - ENEMY_SIZE/2, ENEMY_SIZE, ENEMY_SIZE);
   }
 
+  // самолёт: тень на земле + силуэт самого самолёта (заглушки, потом заменим на арт)
+  if (plane) {
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.beginPath();
+    ctx.ellipse(plane.x, plane.y, 30, 16, 0, 0, Math.PI*2);
+    ctx.fill();
+
+    const angle = Math.atan2(plane.endY - plane.startY, plane.endX - plane.startX);
+    ctx.save();
+    ctx.translate(plane.x, plane.y);
+    ctx.rotate(angle);
+    ctx.fillStyle = '#cccccc';
+    ctx.beginPath();
+    ctx.moveTo(20, 0);
+    ctx.lineTo(-16, -10);
+    ctx.lineTo(-8, 0);
+    ctx.lineTo(-16, 10);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+
   // игрок
-  ctx.fillStyle = '#4ecdc4';
+  ctx.fillStyle = THEMES[currentTheme].playerColor;
   ctx.fillRect(player.x - PLAYER_SIZE/2, player.y - PLAYER_SIZE/2, PLAYER_SIZE, PLAYER_SIZE);
   ctx.fillStyle = '#0d1117';
   ctx.fillRect(player.x-6, player.y-4, 3, 3);
