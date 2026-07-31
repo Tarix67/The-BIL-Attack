@@ -17,7 +17,7 @@
     user-select: none;
   }
   #ui {
-    position: fixed; top: 10px; left: 10px; right: 10px;
+    position: fixed; top: 10px; left: 10px; right: 60px;
     display: flex; justify-content: space-between;
     font-size: clamp(13px, 3.5vw, 18px);
     text-shadow: 2px 2px 0 #000;
@@ -30,6 +30,52 @@
     background: #0d1117;
     touch-action: none;
   }
+  #pauseBtn {
+    position: fixed; top: 8px; right: 8px;
+    width: 42px; height: 42px;
+    border-radius: 50%;
+    background: rgba(0,0,0,0.45);
+    border: 2px solid rgba(255,255,255,0.4);
+    color: #fff;
+    font-size: 18px;
+    display: flex; align-items: center; justify-content: center;
+    z-index: 6;
+    touch-action: manipulation;
+  }
+  .overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.72);
+    display: none;
+    align-items: center; justify-content: center;
+    z-index: 20;
+  }
+  .panel {
+    background: #16213e;
+    border: 2px solid #4ecdc4;
+    border-radius: 10px;
+    padding: 24px 28px;
+    min-width: 240px;
+    text-align: center;
+    text-shadow: none;
+  }
+  .panel h2 { margin-top: 0; color: #4ecdc4; font-size: clamp(20px, 5vw, 26px); }
+  .panel button {
+    display: block; width: 100%;
+    background: #4ecdc4; color: #0d1117; border: none;
+    padding: 12px; margin: 8px 0; font-size: 16px; cursor: pointer;
+    font-family: inherit; border-radius: 6px; font-weight: bold;
+    touch-action: manipulation;
+  }
+  .panel button.secondary { background: #2a2a44; color: #eee; }
+  .settings-row {
+    display: flex; justify-content: space-between; align-items: center;
+    margin: 14px 0; gap: 10px;
+  }
+  .theme-buttons { display: flex; gap: 6px; }
+  .theme-buttons button {
+    margin: 0; padding: 8px 10px; font-size: 13px; width: auto;
+  }
+  .theme-buttons button.active { outline: 3px solid #ffd93d; }
   #gameover {
     position: fixed; top: 50%; left: 50%;
     transform: translate(-50%, -50%);
@@ -54,10 +100,39 @@
 <div id="ui">
   <span>HP: <span id="hp">100</span></span>
   <span>Счёт: <span id="score">0</span></span>
-  <span>Волна: <span id="wave">1</span></span>
+  <span>Волна: <span id="wave">1</span> (<span id="remaining">0</span>)</span>
 </div>
 
+<button id="pauseBtn">⏸</button>
+
 <canvas id="game"></canvas>
+
+<div id="pauseOverlay" class="overlay">
+  <div class="panel">
+    <h2>Пауза</h2>
+    <button id="resumeBtn">Продолжить</button>
+    <button id="openSettingsBtn" class="secondary">Настройки</button>
+    <button id="restartFromPauseBtn" class="secondary">Начать заново</button>
+  </div>
+</div>
+
+<div id="settingsOverlay" class="overlay">
+  <div class="panel">
+    <h2>Настройки</h2>
+    <div class="settings-row">
+      <span>Стилистика</span>
+      <div class="theme-buttons" id="themeButtons">
+        <button data-theme="desert">Пустыня</button>
+        <button data-theme="office">Офис</button>
+      </div>
+    </div>
+    <div class="settings-row">
+      <span>Звук</span>
+      <label><input type="checkbox" id="soundToggle" checked></label>
+    </div>
+    <button id="backToPauseBtn" class="secondary">Назад</button>
+  </div>
+</div>
 
 <div id="gameover">
   <h1>ТЫ ПОЙМАН</h1>
@@ -72,44 +147,88 @@ let W, H;
 
 // ---------- Состояние игры ----------
 let keys = {};
-let player, bullets, enemies, particles;
-let score, wave, spawnTimer, waveTimer, gameOver;
-let plane, pickups, supplyTimer;
+let player, bullets, enemies, particles, enemyBullets;
+let score, wave, spawnTimer, gameOver;
+let waveEnemiesTotal, waveEnemiesSpawned, waveBreakTimer;
+let plane, pickups;
+let paused = false;
+let shakeIntensity = 0;
 
-// Все скорости теперь в "пикселях/секунду", а не "за кадр" —
-// это делает игру одинаковой по скорости независимо от FPS устройства
-const PLAYER_SPEED = 280;      // было 192 — прибавили ходу
+// Все скорости в "пикселях/секунду" — одинаковая скорость независимо от FPS устройства
+const PLAYER_SPEED = 280;
 const PLAYER_SIZE = 22;
-const BULLET_SPEED = 550;      // было 420
-const FIRE_RATE = 0.2;         // было 0.25 — стреляем чуть чаще
-const ENEMY_BASE_SPEED = 100;  // было 72
+const BULLET_SPEED = 550;
+const FIRE_RATE = 0.2;
+const ENEMY_BASE_SPEED = 100;
 const ENEMY_SIZE = 20;
 const JOY_RADIUS = 55;
-const CONTACT_DPS = 30;        // урона в секунду при контакте с врагом (было 0.5/кадр)
-const PARTICLE_LIFE = 0.33;    // секунд жизни частицы (было 20 кадров)
-const WAVE_DURATION = 10;      // секунд на волну (было 600 кадров)
+const CONTACT_DPS = 30;
+const PARTICLE_LIFE = 0.33;
+const WAVE_BREAK = 1.2; // пауза перед стартом следующей волны, чтобы был видимый "выдох"
 const WALL_THICKNESS = 12;
-const SUPPLY_INTERVAL = 25;    // секунд между пролётами самолёта
-const PLANE_SPEED = 500;       // пикселей/сек, летит быстро
+const PLANE_WAVE_INTERVAL = 3;  // самолёт прилетает раз в N волн
+const PLANE_SPEED = 500;
 const CRATE_SIZE = 26;
-const HEAL_AMOUNT = 35;        // сколько HP восстанавливает аптечка
-const SCORE_PER_SECOND = 12;   // очки начисляются за выживание, не за убийства
+const HEAL_AMOUNT = 20;
+const SCORE_BASE = 8;          // очков/сек на 1-й волне
+const SCORE_WAVE_GROWTH = 1.6; // на сколько очков/сек растёт скорость счёта за каждую волну
+const HIT_FLASH_DURATION = 0.08; // сколько секунд враг светится белым при уроне
+const SHAKE_DECAY = 18;          // как быстро затухает тряска экрана
+const DAMAGE_SOUND_COOLDOWN = 0.35; // чтобы звук урона не спамил при долгом контакте
+const SPRINT_DURATION = 0.35;    // сколько секунд длится ускорение после удара
+const SPRINT_MULT = 1.7;         // во сколько раз быстрее игрок во время спринта
+const SPRINT_COOLDOWN = 4;       // не чаще раза в столько секунд (диапазон 3-5 сек)
 
 let lastTime = 0;
+
+// ---------- Звук (простые бипы через Web Audio — заглушка вместо сэмплов) ----------
+let audioCtx = null;
+let soundEnabled = true;
+function ensureAudio() {
+  if (!audioCtx) {
+    try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { /* нет поддержки — молча игнорируем */ }
+  } else if (audioCtx.state === 'suspended') {
+    audioCtx.resume();
+  }
+}
+window.addEventListener('pointerdown', ensureAudio);
+window.addEventListener('keydown', ensureAudio);
+
+function beep(freq, duration, type, volume) {
+  if (!soundEnabled || !audioCtx) return;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = type || 'square';
+  osc.frequency.value = freq;
+  gain.gain.value = volume != null ? volume : 0.12;
+  osc.connect(gain); gain.connect(audioCtx.destination);
+  const now = audioCtx.currentTime;
+  osc.start(now);
+  gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+  osc.stop(now + duration);
+}
+function sfxShoot()     { beep(760, 0.045, 'square', 0.04); }
+function sfxHit()       { beep(180, 0.06, 'sawtooth', 0.07); }
+function sfxDeath()     { beep(110, 0.14, 'sawtooth', 0.09); }
+function sfxPickup()    { beep(700, 0.16, 'sine', 0.10); }
+function sfxDamage()    { beep(90, 0.12, 'square', 0.10); }
+function sfxEnemyShot() { beep(320, 0.05, 'triangle', 0.05); }
+
+function triggerShake(amount) {
+  shakeIntensity = Math.max(shakeIntensity, amount);
+}
 
 // ---------- Темы/стилистика ----------
 // Вся "визуальная личность" игры вынесена сюда. Пока это только цвета и подписи
 // (заглушки вместо арта) — когда появятся PNG под конкретную тему, сюда же
-// добавятся пути к спрайтам (player, enemy, background, wall, plane), и вся
-// остальная логика останется без изменений — просто будет брать картинки
-// вместо fillRect/цвета.
+// добавятся пути к спрайтам, и вся остальная логика останется без изменений.
 const THEMES = {
   desert: {
     label: 'Пустыня',
     enemyLabel: 'Монстр',
     playerLabel: 'Солдат',
     playerColor: '#4ecdc4',
-    enemyHueBase: 350,      // базовый оттенок врагов по волнам (текущая палитра)
+    enemyHueBase: 350,
     bgColor: '#0d1117',
     gridColor: '#1e2030',
     wallColor: '#e94560',
@@ -133,18 +252,33 @@ function switchTheme(name) {
   if (!THEMES[name]) return;
   currentTheme = name;
   canvas.style.background = THEMES[name].bgColor;
+  document.querySelectorAll('#themeButtons button').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.theme === name);
+  });
 }
 
-// Временная горячая клавиша T — переключает тему для превью,
-// пока нет настоящего экрана настроек. Уберём/заменим на UI позже.
-window.addEventListener('keydown', e => {
-  if (e.key.toLowerCase() === 't') {
-    switchTheme(currentTheme === 'desert' ? 'office' : 'desert');
-  }
-});
+// ---------- Типы врагов ----------
+// Каждый тип — набор множителей поверх базовых характеристик + форма для
+// визуального отличия без арта. hueOffset красит их по-разному поверх темы.
+const ENEMY_TYPES = {
+  chaser:  { hpBase: 2,  sizeMult: 1,    speedMult: 1,   contactDpsMult: 1,   minWave: 1,  hueOffset: 0,   shape: 'square' },
+  runner:  { hpBase: 1,  sizeMult: 0.7,  speedMult: 1.8, contactDpsMult: 0.6, minWave: 3,  hueOffset: 60,  shape: 'diamond' },
+  giant:   { hpBase: 10, sizeMult: 2.1,  speedMult: 0.45,contactDpsMult: 2.2, minWave: 10, hueOffset: 140, shape: 'circle' },
+  shooter: { hpBase: 2,  sizeMult: 0.9,  speedMult: 0.8, contactDpsMult: 0.7, minWave: 7,  hueOffset: 210, shape: 'triangle',
+             ranged: true, shootRange: 320, shootInterval: 1.8, bulletSpeed: 260, bulletDamage: 8 }
+};
+
+function pickEnemyType() {
+  const available = Object.keys(ENEMY_TYPES).filter(k => wave >= ENEMY_TYPES[k].minWave);
+  return available[Math.floor(Math.random() * available.length)];
+}
+
+// сколько врагов нужно зачистить за волну, чтобы началась следующая
+function enemiesPerWave(w) {
+  return Math.min(24, 4 + w * 2);
+}
 
 // ---------- Мир и камера ----------
-// Мир больше экрана — игрок бегает по нему, камера следует, есть стены-границы.
 let WORLD_W, WORLD_H;
 let camera = { x: 0, y: 0 };
 
@@ -173,23 +307,28 @@ window.addEventListener('orientationchange', resizeCanvas);
 function init() {
   resizeCanvas();
   switchTheme(currentTheme);
-  // мир всегда заметно больше экрана — есть куда бежать до стены
   WORLD_W = Math.max(2400, Math.round(W * 1.8));
   WORLD_H = Math.max(1800, Math.round(H * 1.8));
-  player = { x: WORLD_W/2, y: WORLD_H/2, hp: 100, maxHp: 100, fireCooldown: 0 };
+  player = { x: WORLD_W/2, y: WORLD_H/2, hp: 100, maxHp: 100, fireCooldown: 0, sprintTimer: 0, sprintCooldown: 0 };
   bullets = [];
+  enemyBullets = [];
   enemies = [];
   particles = [];
   score = 0;
   wave = 1;
   spawnTimer = 0;
-  waveTimer = 0;
+  waveEnemiesTotal = enemiesPerWave(wave);
+  waveEnemiesSpawned = 0;
+  waveBreakTimer = 0;
   gameOver = false;
+  paused = false;
+  shakeIntensity = 0;
   plane = null;
   pickups = [];
-  supplyTimer = SUPPLY_INTERVAL - 8; // первый самолёт прилетит чуть раньше, чем обычный интервал
   updateCamera();
   document.getElementById('gameover').style.display = 'none';
+  document.getElementById('pauseOverlay').style.display = 'none';
+  document.getElementById('settingsOverlay').style.display = 'none';
 }
 
 // ---------- Ввод: клавиатура (для теста на компе) ----------
@@ -209,7 +348,8 @@ function touchPos(t) {
 
 canvas.addEventListener('touchstart', e => {
   e.preventDefault();
-  if (joystick.active) return; // одна точка управления за раз
+  ensureAudio();
+  if (joystick.active) return;
   const t = e.changedTouches[0];
   const p = touchPos(t);
   joystick.active = true;
@@ -254,9 +394,55 @@ function restart() {
   requestAnimationFrame(loop);
 }
 
+// ---------- Пауза и настройки ----------
+const pauseBtn = document.getElementById('pauseBtn');
+const pauseOverlay = document.getElementById('pauseOverlay');
+const settingsOverlay = document.getElementById('settingsOverlay');
+
+function openPause() {
+  if (gameOver) return;
+  paused = true;
+  pauseOverlay.style.display = 'flex';
+}
+function closePause() {
+  paused = false;
+  pauseOverlay.style.display = 'none';
+}
+pauseBtn.addEventListener('click', () => { ensureAudio(); openPause(); });
+document.getElementById('resumeBtn').addEventListener('click', closePause);
+document.getElementById('restartFromPauseBtn').addEventListener('click', () => {
+  pauseOverlay.style.display = 'none';
+  restart();
+});
+document.getElementById('openSettingsBtn').addEventListener('click', () => {
+  pauseOverlay.style.display = 'none';
+  settingsOverlay.style.display = 'flex';
+});
+document.getElementById('backToPauseBtn').addEventListener('click', () => {
+  settingsOverlay.style.display = 'none';
+  pauseOverlay.style.display = 'flex';
+});
+document.querySelectorAll('#themeButtons button').forEach(btn => {
+  btn.addEventListener('click', () => switchTheme(btn.dataset.theme));
+});
+document.getElementById('soundToggle').addEventListener('change', e => {
+  soundEnabled = e.target.checked;
+});
+window.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    if (settingsOverlay.style.display === 'flex') {
+      settingsOverlay.style.display = 'none';
+      pauseOverlay.style.display = 'flex';
+    } else if (paused) {
+      closePause();
+    } else {
+      openPause();
+    }
+  }
+});
+
 // ---------- Самолёт со снабжением ----------
 function spawnPlane() {
-  // летит по прямой через весь мир, с одного случайного края до противоположного
   const horizontal = Math.random() < 0.5;
   let startX, startY, endX, endY;
   const margin = 60;
@@ -275,7 +461,6 @@ function spawnPlane() {
   }
   const dist = Math.hypot(endX - startX, endY - startY);
   const duration = dist / PLANE_SPEED;
-  // ящик падает где-то в середине пролёта (40%-60% пути), чтобы точка сброса была внутри карты
   const dropProgress = 0.4 + Math.random() * 0.2;
   plane = {
     startX, startY, endX, endY, duration,
@@ -294,7 +479,10 @@ function collectPickup(p) {
   }
   // сюда позже добавятся типы 'ammo' и 'upgrade', когда появятся сами системы
   spawnParticles(p.x, p.y, THEMES[currentTheme].crateColor);
+  sfxPickup();
 }
+
+// ---------- Спавн врагов ----------
 function spawnEnemy() {
   const side = Math.floor(Math.random() * 4);
   let x, y;
@@ -304,13 +492,20 @@ function spawnEnemy() {
   else if (side === 2) { x = margin + Math.random() * (WORLD_W - margin*2); y = margin; }
   else { x = margin + Math.random() * (WORLD_W - margin*2); y = WORLD_H - margin; }
 
+  const typeKey = pickEnemyType();
+  const type = ENEMY_TYPES[typeKey];
   const speedMult = 1 + (wave - 1) * 0.12;
   const hueBase = THEMES[currentTheme].enemyHueBase;
   enemies.push({
+    type: typeKey,
     x, y,
-    hp: 2 + Math.floor(wave / 3),
-    speed: ENEMY_BASE_SPEED * speedMult,
-    color: `hsl(${hueBase - wave * 5}, 70%, 55%)`
+    hp: type.hpBase + Math.floor(wave / 3),
+    speed: ENEMY_BASE_SPEED * speedMult * type.speedMult,
+    size: ENEMY_SIZE * type.sizeMult,
+    contactDps: CONTACT_DPS * type.contactDpsMult,
+    color: `hsl(${(hueBase + type.hueOffset - wave * 5 + 360) % 360}, 70%, 55%)`,
+    hitFlash: 0,
+    fireTimer: type.ranged ? Math.random() * type.shootInterval : 0
   });
 }
 
@@ -319,11 +514,15 @@ function update(dt) {
   if (gameOver) return;
 
   // очки капают каждую секунду просто за то, что вы живы — не за фраги
-  score += SCORE_PER_SECOND * dt;
+  score += (SCORE_BASE + (wave - 1) * SCORE_WAVE_GROWTH) * dt;
+
+  // затухание тряски экрана
+  shakeIntensity = Math.max(0, shakeIntensity - SHAKE_DECAY * dt);
 
   // --- движение игрока: джойстик (аналог) или клавиатура (цифровое) ---
-  let dx = 0, dy = 0;  if (joystick.active) {
-    dx = joystick.dx; dy = joystick.dy; // уже в диапазоне [-1, 1]
+  let dx = 0, dy = 0;
+  if (joystick.active) {
+    dx = joystick.dx; dy = joystick.dy;
   } else {
     if (keys['w'] || keys['arrowup']) dy -= 1;
     if (keys['s'] || keys['arrowdown']) dy += 1;
@@ -332,8 +531,13 @@ function update(dt) {
     const len = Math.hypot(dx, dy) || 1;
     dx /= len; dy /= len;
   }
-  player.x += dx * PLAYER_SPEED * dt;
-  player.y += dy * PLAYER_SPEED * dt;
+  // мини-спринт: если недавно получили урон, двигаемся быстрее — шанс вырваться
+  player.sprintTimer = Math.max(0, player.sprintTimer - dt);
+  player.sprintCooldown = Math.max(0, player.sprintCooldown - dt);
+  const sprintMult = player.sprintTimer > 0 ? SPRINT_MULT : 1;
+
+  player.x += dx * PLAYER_SPEED * sprintMult * dt;
+  player.y += dy * PLAYER_SPEED * sprintMult * dt;
   player.x = Math.max(PLAYER_SIZE, Math.min(WORLD_W - PLAYER_SIZE, player.x));
   player.y = Math.max(PLAYER_SIZE, Math.min(WORLD_H - PLAYER_SIZE, player.y));
   updateCamera();
@@ -353,44 +557,102 @@ function update(dt) {
       vy: Math.sin(angle) * BULLET_SPEED
     });
     player.fireCooldown = FIRE_RATE;
+    sfxShoot();
   }
 
-  // --- пули ---
+  // --- пули игрока ---
   bullets = bullets.filter(b => {
     b.x += b.vx * dt; b.y += b.vy * dt;
     return b.x > -10 && b.x < WORLD_W+10 && b.y > -10 && b.y < WORLD_H+10;
   });
 
-  // --- враги: движение к игроку ---
+  // --- враги: движение (с учётом типа) + стрельба у дальнобойных ---
   for (const e of enemies) {
+    const type = ENEMY_TYPES[e.type];
+    e.hitFlash = Math.max(0, e.hitFlash - dt);
     const angle = Math.atan2(player.y - e.y, player.x - e.x);
-    e.x += Math.cos(angle) * e.speed * dt;
-    e.y += Math.sin(angle) * e.speed * dt;
+    const dist = Math.hypot(player.x - e.x, player.y - e.y);
+
+    if (type.ranged) {
+      if (dist > type.shootRange * 0.85) {
+        e.x += Math.cos(angle) * e.speed * dt;
+        e.y += Math.sin(angle) * e.speed * dt;
+      } else if (dist < type.shootRange * 0.5) {
+        e.x -= Math.cos(angle) * e.speed * dt;
+        e.y -= Math.sin(angle) * e.speed * dt;
+      }
+      e.fireTimer -= dt;
+      if (e.fireTimer <= 0 && dist < type.shootRange) {
+        enemyBullets.push({
+          x: e.x, y: e.y,
+          vx: Math.cos(angle) * type.bulletSpeed,
+          vy: Math.sin(angle) * type.bulletSpeed,
+          damage: type.bulletDamage
+        });
+        e.fireTimer = type.shootInterval;
+        sfxEnemyShot();
+      }
+    } else {
+      e.x += Math.cos(angle) * e.speed * dt;
+      e.y += Math.sin(angle) * e.speed * dt;
+    }
   }
 
-  // --- коллизии: пуля-враг ---
+  // --- пули врагов: полёт + попадание по игроку ---
+  let damagedThisFrame = false;
+  enemyBullets = enemyBullets.filter(b => {
+    b.x += b.vx * dt; b.y += b.vy * dt;
+    if (Math.hypot(b.x - player.x, b.y - player.y) < PLAYER_SIZE/2 + 4) {
+      player.hp -= b.damage;
+      damagedThisFrame = true;
+      if (player.sprintCooldown <= 0) {
+        player.sprintTimer = SPRINT_DURATION;
+        player.sprintCooldown = SPRINT_COOLDOWN;
+      }
+      triggerShake(8);
+      return false;
+    }
+    return b.x > -10 && b.x < WORLD_W+10 && b.y > -10 && b.y < WORLD_H+10;
+  });
+
+  // --- коллизии: пуля игрока — враг (с отбрасыванием и вспышкой) ---
   for (let i = enemies.length - 1; i >= 0; i--) {
     const e = enemies[i];
     for (let j = bullets.length - 1; j >= 0; j--) {
       const b = bullets[j];
-      if (Math.hypot(e.x - b.x, e.y - b.y) < ENEMY_SIZE/2 + 4) {
+      if (Math.hypot(e.x - b.x, e.y - b.y) < e.size/2 + 4) {
         bullets.splice(j, 1);
         e.hp--;
+        e.hitFlash = HIT_FLASH_DURATION;
         spawnParticles(e.x, e.y, e.color);
+        sfxHit();
         if (e.hp <= 0) {
           enemies.splice(i, 1);
+          sfxDeath();
         }
         break;
       }
     }
   }
 
-  // --- коллизии: враг-игрок ---
+  // --- коллизии: враг-игрок (контактный урон) ---
   for (const e of enemies) {
-    if (Math.hypot(e.x - player.x, e.y - player.y) < ENEMY_SIZE/2 + PLAYER_SIZE/2) {
-      player.hp -= CONTACT_DPS * dt;
+    if (Math.hypot(e.x - player.x, e.y - player.y) < e.size/2 + PLAYER_SIZE/2) {
+      player.hp -= e.contactDps * dt;
+      damagedThisFrame = true;
+      player.sprintTimer = SPRINT_DURATION;
+      triggerShake(3);
     }
   }
+
+  if (damagedThisFrame) {
+    if (!update.dmgCooldown || update.dmgCooldown <= 0) {
+      sfxDamage();
+      update.dmgCooldown = DAMAGE_SOUND_COOLDOWN;
+    }
+  }
+  update.dmgCooldown = Math.max(0, (update.dmgCooldown || 0) - dt);
+
   if (player.hp <= 0) {
     gameOver = true;
     document.getElementById('finalScore').textContent = Math.floor(score);
@@ -404,24 +666,31 @@ function update(dt) {
   });
 
   // --- спавн волнами ---
-  spawnTimer += dt;
-  const spawnInterval = Math.max(0.25, 1 - wave * 0.05);
-  if (spawnTimer > spawnInterval) {
-    spawnEnemy();
-    spawnTimer = 0;
-  }
-  waveTimer += dt;
-  if (waveTimer > WAVE_DURATION) {
+  // --- спавн волны: не начинаем следующую, пока текущая не зачищена целиком ---
+  if (waveBreakTimer > 0) {
+    waveBreakTimer -= dt;
+  } else if (waveEnemiesSpawned < waveEnemiesTotal) {
+    spawnTimer += dt;
+    const spawnInterval = Math.max(0.25, 1 - wave * 0.05);
+    if (spawnTimer > spawnInterval) {
+      spawnEnemy();
+      waveEnemiesSpawned++;
+      spawnTimer = 0;
+    }
+  } else if (enemies.length === 0) {
+    // весь пул волны выбит подчистую — можно идти дальше
     wave++;
-    waveTimer = 0;
+    waveEnemiesTotal = enemiesPerWave(wave);
+    waveEnemiesSpawned = 0;
+    spawnTimer = 0;
+    waveBreakTimer = WAVE_BREAK;
+    // самолёт прилетает раз в PLANE_WAVE_INTERVAL волн, стартуя новую волну
+    if (!plane && wave % PLANE_WAVE_INTERVAL === 0) {
+      spawnPlane();
+    }
   }
 
-  // --- самолёт со снабжением ---
-  supplyTimer += dt;
-  if (!plane && supplyTimer > SUPPLY_INTERVAL) {
-    spawnPlane();
-    supplyTimer = 0;
-  }
+  // --- самолёт со снабжением: летит, если запущен (см. триггер выше) ---
   if (plane) {
     plane.elapsed += dt;
     const progress = plane.elapsed / plane.duration;
@@ -450,6 +719,7 @@ function update(dt) {
   document.getElementById('hp').textContent = Math.max(0, Math.ceil(player.hp));
   document.getElementById('score').textContent = Math.floor(score);
   document.getElementById('wave').textContent = wave;
+  document.getElementById('remaining').textContent = (waveEnemiesTotal - waveEnemiesSpawned) + enemies.length;
 }
 
 function spawnParticles(x, y, color) {
@@ -463,14 +733,44 @@ function spawnParticles(x, y, color) {
   }
 }
 
+// ---------- Отрисовка формы врага по типу (заглушки вместо спрайтов) ----------
+function drawEnemyShape(e) {
+  const type = ENEMY_TYPES[e.type];
+  const s = e.size;
+  ctx.fillStyle = e.hitFlash > 0 ? '#ffffff' : e.color;
+  ctx.save();
+  ctx.translate(e.x, e.y);
+  if (type.shape === 'diamond') {
+    ctx.rotate(Math.PI / 4);
+    ctx.fillRect(-s/2, -s/2, s, s);
+  } else if (type.shape === 'circle') {
+    ctx.beginPath();
+    ctx.arc(0, 0, s/2, 0, Math.PI*2);
+    ctx.fill();
+  } else if (type.shape === 'triangle') {
+    ctx.beginPath();
+    ctx.moveTo(0, -s/2);
+    ctx.lineTo(s/2, s/2);
+    ctx.lineTo(-s/2, s/2);
+    ctx.closePath();
+    ctx.fill();
+  } else {
+    ctx.fillRect(-s/2, -s/2, s, s);
+  }
+  ctx.restore();
+}
+
 // ---------- Отрисовка ----------
 function draw() {
   ctx.clearRect(0, 0, W, H);
 
-  ctx.save();
-  ctx.translate(-camera.x, -camera.y);
+  const shakeX = shakeIntensity > 0 ? (Math.random() - 0.5) * shakeIntensity : 0;
+  const shakeY = shakeIntensity > 0 ? (Math.random() - 0.5) * shakeIntensity : 0;
 
-  // фон-сетка (заглушка вместо тайлов) — рисуем только видимую часть мира, не весь мир целиком
+  ctx.save();
+  ctx.translate(-camera.x + shakeX, -camera.y + shakeY);
+
+  // фон-сетка (заглушка вместо тайлов)
   ctx.strokeStyle = THEMES[currentTheme].gridColor;
   ctx.lineWidth = 1;
   const gridStartX = Math.floor(camera.x / 40) * 40;
@@ -493,13 +793,19 @@ function draw() {
     ctx.fillRect(p.x-2, p.y-2, 4, 4);
   }
 
-  // пули
+  // пули игрока
   ctx.fillStyle = '#ffd93d';
   for (const b of bullets) {
     ctx.fillRect(b.x-3, b.y-3, 6, 6);
   }
 
-  // ящики со снабжением (заглушка — цветной ромб, покачивается для заметности)
+  // пули врагов
+  ctx.fillStyle = '#ff5566';
+  for (const b of enemyBullets) {
+    ctx.fillRect(b.x-3, b.y-3, 6, 6);
+  }
+
+  // ящики со снабжением
   for (const p of pickups) {
     const bob = Math.sin(p.bobPhase) * 4;
     ctx.save();
@@ -513,13 +819,12 @@ function draw() {
     ctx.restore();
   }
 
-  // враги
+  // враги — разная форма под тип
   for (const e of enemies) {
-    ctx.fillStyle = e.color;
-    ctx.fillRect(e.x - ENEMY_SIZE/2, e.y - ENEMY_SIZE/2, ENEMY_SIZE, ENEMY_SIZE);
+    drawEnemyShape(e);
   }
 
-  // самолёт: тень на земле + силуэт самого самолёта (заглушки, потом заменим на арт)
+  // самолёт: тень + силуэт (заглушки)
   if (plane) {
     ctx.fillStyle = 'rgba(0,0,0,0.35)';
     ctx.beginPath();
@@ -550,7 +855,7 @@ function draw() {
 
   ctx.restore();
 
-  // виртуальный джойстик — рисуется в координатах экрана, камера на него не влияет
+  // виртуальный джойстик — в координатах экрана, камера/тряска на него не влияют
   if (joystick.active) {
     ctx.strokeStyle = 'rgba(255,255,255,0.4)';
     ctx.lineWidth = 3;
@@ -567,14 +872,11 @@ function draw() {
 
 function loop(timestamp) {
   if (!lastTime) lastTime = timestamp;
-  // реальное время с прошлого кадра, в секундах
   let dt = (timestamp - lastTime) / 1000;
   lastTime = timestamp;
-  // подстраховка: если вкладка была свёрнута и dt огромный — не даём игре
-  // "телепортировать" всё за один скачок, ограничиваем максимальный шаг
   dt = Math.min(dt, 0.05);
 
-  update(dt);
+  if (!paused) update(dt);
   draw();
   if (!gameOver) requestAnimationFrame(loop);
 }
