@@ -5,104 +5,28 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Survivor Prototype</title>
 <style>
-  html, body {
-    margin: 0; padding: 0; height: 100%; width: 100%;
-    background: #0d1117;
-    font-family: 'Courier New', monospace;
-    color: #eee;
-    overflow: hidden;
-    touch-action: none;
-    overscroll-behavior: none;
-    -webkit-user-select: none;
-    user-select: none;
-  }
-  #ui {
-    position: fixed; top: 10px; left: 10px; right: 60px;
-    display: flex; justify-content: space-between;
-    font-size: clamp(13px, 3.5vw, 18px);
-    text-shadow: 2px 2px 0 #000;
-    pointer-events: none;
-    z-index: 5;
-  }
-  canvas {
-    image-rendering: pixelated;
-    display: block;
-    background: #0d1117;
-    touch-action: none;
-  }
-  #pauseBtn {
-    position: fixed; top: 8px; right: 8px;
-    width: 42px; height: 42px;
-    border-radius: 50%;
-    background: rgba(0,0,0,0.45);
-    border: 2px solid rgba(255,255,255,0.4);
-    color: #fff;
-    font-size: 18px;
-    display: flex; align-items: center; justify-content: center;
-    z-index: 6;
-    touch-action: manipulation;
-  }
-  .overlay {
-    position: fixed; inset: 0;
-    background: rgba(0,0,0,0.72);
-    display: none;
-    align-items: center; justify-content: center;
-    z-index: 20;
-  }
-  .panel {
-    background: #16213e;
-    border: 2px solid #4ecdc4;
-    border-radius: 10px;
-    padding: 24px 28px;
-    min-width: 240px;
-    text-align: center;
-    text-shadow: none;
-  }
-  .panel h2 { margin-top: 0; color: #4ecdc4; font-size: clamp(20px, 5vw, 26px); }
-  .panel button {
-    display: block; width: 100%;
-    background: #4ecdc4; color: #0d1117; border: none;
-    padding: 12px; margin: 8px 0; font-size: 16px; cursor: pointer;
-    font-family: inherit; border-radius: 6px; font-weight: bold;
-    touch-action: manipulation;
-  }
-  .panel button.secondary { background: #2a2a44; color: #eee; }
-  .settings-row {
-    display: flex; justify-content: space-between; align-items: center;
-    margin: 14px 0; gap: 10px;
-  }
-  .theme-buttons { display: flex; gap: 6px; }
-  .theme-buttons button {
-    margin: 0; padding: 8px 10px; font-size: 13px; width: auto;
-  }
-  .theme-buttons button.active { outline: 3px solid #ffd93d; }
-  #gameover {
-    position: fixed; top: 50%; left: 50%;
-    transform: translate(-50%, -50%);
-    text-align: center;
-    display: none;
-    text-shadow: 2px 2px 0 #000;
-    z-index: 10;
-    width: 80%;
-  }
-  #gameover h1 { color: #e94560; font-size: clamp(28px, 8vw, 40px); margin-bottom: 10px; }
-  #gameover p { font-size: clamp(16px, 4vw, 20px); }
-  #gameover button {
-    background: #e94560; color: white; border: none;
-    padding: 14px 28px; font-size: clamp(16px, 4vw, 18px); cursor: pointer;
-    font-family: inherit; border-radius: 4px;
-    touch-action: manipulation; margin: 4px;
-  }
-  #submitStatus { font-size: clamp(13px, 3.5vw, 16px) !important; min-height: 1.4em; color: #ffd93d; }
-  #nameInput {
-    width: 100%; box-sizing: border-box;
-    padding: 12px; margin: 10px 0 4px;
-    font-size: 18px; font-family: inherit; text-align: center;
-    border-radius: 6px; border: 2px solid #4ecdc4;
-    background: #0d1117; color: #fff;
-    -webkit-user-select: text; user-select: text;
-  }
-  #nameError { color: #e94560; font-size: 13px; min-height: 1.2em; margin: 0 0 6px; }
+  html, body { margin:0; padding:0; height:100%; width:100%; background:#0d1117; font-family:'Courier New',monospace; color:#eee; overflow:hidden; touch-action:none; overscroll-behavior:none; -webkit-user-select:none; user-select:none; }
+  #ui { position:fixed; top:10px; left:10px; right:60px; display:flex; justify-content:space-between; font-size:clamp(13px,3.5vw,18px); text-shadow:2px 2px 0 #000; pointer-events:none; z-index:5; }
+  #fx { position:fixed; top:36px; left:10px; font-size:clamp(11px,3vw,14px); line-height:1.35; text-shadow:1px 1px 0 #000; pointer-events:none; z-index:5; }
+  #toast { position:fixed; top:22%; left:0; right:0; text-align:center; font-size:clamp(18px,5vw,28px); font-weight:bold; text-shadow:2px 2px 0 #000; pointer-events:none; opacity:0; transition:opacity .25s; z-index:7; }
+  canvas { image-rendering:pixelated; display:block; background:#0d1117; touch-action:none; }
+  #pauseBtn { position:fixed; top:8px; right:8px; width:42px; height:42px; border-radius:50%; background:rgba(0,0,0,.45); border:2px solid rgba(255,255,255,.4); color:#fff; font-size:18px; display:flex; align-items:center; justify-content:center; z-index:6; touch-action:manipulation; }
+  .overlay { position:fixed; inset:0; background:rgba(0,0,0,.72); display:none; align-items:center; justify-content:center; z-index:20; }
+  .panel { background:#16213e; border:2px solid #4ecdc4; border-radius:10px; padding:24px 28px; min-width:240px; text-align:center; text-shadow:none; }
+  .panel h2 { margin-top:0; color:#4ecdc4; font-size:clamp(20px,5vw,26px); }
+  .panel button { display:block; width:100%; background:#4ecdc4; color:#0d1117; border:none; padding:12px; margin:8px 0; font-size:16px; cursor:pointer; font-family:inherit; border-radius:6px; font-weight:bold; touch-action:manipulation; }
+  .panel button.secondary { background:#2a2a44; color:#eee; }
+  .settings-row { display:flex; justify-content:space-between; align-items:center; margin:14px 0; gap:10px; }
+  .theme-buttons { display:flex; gap:6px; }
+  .theme-buttons button { margin:0; padding:8px 10px; font-size:13px; width:auto; }
+  .theme-buttons button.active { outline:3px solid #ffd93d; }
+  #gameover { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); text-align:center; display:none; text-shadow:2px 2px 0 #000; z-index:10; width:80%; }
+  #gameover h1 { color:#e94560; font-size:clamp(28px,8vw,40px); margin-bottom:10px; }
+  #gameover p { font-size:clamp(16px,4vw,20px); }
+  #gameover button { background:#e94560; color:#fff; border:none; padding:14px 28px; font-size:clamp(16px,4vw,18px); cursor:pointer; font-family:inherit; border-radius:4px; touch-action:manipulation; margin:4px; }
+  #submitStatus { font-size:clamp(13px,3.5vw,16px) !important; min-height:1.4em; color:#ffd93d; }
+  #nameInput { width:100%; box-sizing:border-box; padding:12px; margin:10px 0 4px; font-size:18px; font-family:inherit; text-align:center; border-radius:6px; border:2px solid #4ecdc4; background:#0d1117; color:#fff; -webkit-user-select:text; user-select:text; }
+  #nameError { color:#e94560; font-size:13px; min-height:1.2em; margin:0 0 6px; }
 </style>
 </head>
 <body>
@@ -112,6 +36,8 @@
   <span>Счёт: <span id="score">0</span></span>
   <span>Волна: <span id="wave">1</span> (<span id="remaining">0</span>)</span>
 </div>
+<div id="fx"></div>
+<div id="toast"></div>
 
 <button id="pauseBtn">⏸</button>
 
@@ -167,21 +93,22 @@
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 let W, H;
+let zoom = 1, VW, VH; // zoom < 1 на телефонах: камера "отъезжает", видно дальше
 
-// ---------- Состояние игры ----------
 let keys = {};
-let player, bullets, enemies, particles, enemyBullets;
+let player, bullets, enemies, particles, enemyBullets, shockwaves;
 let score, wave, spawnTimer, gameOver;
 let waveEnemiesTotal, waveEnemiesSpawned, waveBreakTimer;
-let plane, pickups;
+let plane, pickups, boss;
 let paused = false;
-let started = false;      // игра стартует только после ввода имени
-let runTime = 0;          // сколько секунд игрок реально играл (без пауз)
+let started = false;
+let runTime = 0;
 let playerName = '';
 let scoreSubmitted = false;
 let shakeIntensity = 0;
+let hurtFlag = false;
+let toastT = 0;
 
-// Все скорости в "пикселях/секунду" — одинаковая скорость независимо от FPS устройства
 const PLAYER_SPEED = 280;
 const PLAYER_SIZE = 22;
 const BULLET_SPEED = 550;
@@ -191,47 +118,46 @@ const ENEMY_SIZE = 20;
 const JOY_RADIUS = 55;
 const CONTACT_DPS = 30;
 const PARTICLE_LIFE = 0.33;
-const WAVE_BREAK = 1.2; // пауза перед стартом следующей волны, чтобы был видимый "выдох"
+const WAVE_BREAK = 1.2;
 const WALL_THICKNESS = 12;
-const PLANE_WAVE_INTERVAL = 3;  // самолёт прилетает раз в N волн
+const PLANE_WAVE_INTERVAL = 3;
 const PLANE_SPEED = 500;
 const CRATE_SIZE = 26;
 const HEAL_AMOUNT = 20;
-const SCORE_BASE = 8;          // очков/сек на 1-й волне
-const SCORE_WAVE_GROWTH = 1.6; // на сколько очков/сек растёт скорость счёта за каждую волну
-const HIT_FLASH_DURATION = 0.08; // сколько секунд враг светится белым при уроне
-const SHAKE_DECAY = 18;          // как быстро затухает тряска экрана
-const DAMAGE_SOUND_COOLDOWN = 0.35; // чтобы звук урона не спамил при долгом контакте
-const SPRINT_DURATION = 0.35;    // сколько секунд длится ускорение после удара
-const SPRINT_MULT = 1.7;         // во сколько раз быстрее игрок во время спринта
-const SPRINT_COOLDOWN = 4;       // не чаще раза в столько секунд (диапазон 3-5 сек)
+const SCORE_BASE = 8;
+const SCORE_WAVE_GROWTH = 1.6;
+const HIT_FLASH_DURATION = 0.08;
+const SHAKE_DECAY = 18;
+const DAMAGE_SOUND_COOLDOWN = 0.35;
+const SPRINT_DURATION = 0.35;
+const SPRINT_MULT = 1.7;
+const SPRINT_COOLDOWN = 4;
+const BOSS_EVERY = 5;
+const MAX_GUNS = 4;
+const ENEMY_DROP_CHANCE = 0.05;
+const VIEW_TARGET = 600; // сколько мировых единиц должно помещаться по МЕНЬШЕЙ стороне экрана
+const MIN_ZOOM = 0.45;
 
 let lastTime = 0;
 
 // ---------- Лидерборд (Supabase) ----------
-// Вставьте сюда данные вашего проекта: Supabase → Project Settings → API
-const SUPABASE_URL = 'https://wydvpmrmsmhjwtwaafxe.supabase.co';       // https://xxxx.supabase.co
-const SUPABASE_KEY = 'sb_publishable_v73ueWUwtzxivjLLONlTlA_iKlWfPhy'; // публичный ключ (anon / publishable)
+const SUPABASE_URL = 'https://wydvpmrmsmhjwtwaafxe.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_v73ueWUwtzxivjLLONlTlA_iKlWfPhy';
 
 function leaderboardConfigured() {
   return SUPABASE_URL.startsWith('https://') && !SUPABASE_KEY.startsWith('PASTE');
 }
-
 function supabaseHeaders() {
   const h = { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY };
-  if (SUPABASE_KEY.startsWith('eyJ')) h['Authorization'] = 'Bearer ' + SUPABASE_KEY; // старый формат ключа (JWT)
+  if (SUPABASE_KEY.startsWith('eyJ')) h['Authorization'] = 'Bearer ' + SUPABASE_KEY;
   return h;
 }
-
 async function submitScore() {
   const statusEl = document.getElementById('submitStatus');
   const retryBtn = document.getElementById('retrySubmitBtn');
   retryBtn.style.display = 'none';
   if (scoreSubmitted) return;
-  if (!leaderboardConfigured()) {
-    statusEl.textContent = '';
-    return;
-  }
+  if (!leaderboardConfigured()) { statusEl.textContent = ''; return; }
   statusEl.textContent = 'Отправляем результат...';
   try {
     const res = await fetch(SUPABASE_URL + '/rest/v1/rpc/submit_score', {
@@ -257,7 +183,7 @@ document.getElementById('retrySubmitBtn').addEventListener('click', submitScore)
 // ---------- Экран ввода имени ----------
 const startOverlay = document.getElementById('startOverlay');
 const nameInput = document.getElementById('nameInput');
-try { nameInput.value = localStorage.getItem('playerName') || ''; } catch (e) { /* хранилище недоступно */ }
+try { nameInput.value = localStorage.getItem('playerName') || ''; } catch (e) {}
 
 function startGame() {
   const name = nameInput.value.trim().replace(/\s+/g, ' ');
@@ -266,7 +192,7 @@ function startGame() {
     return;
   }
   playerName = name;
-  try { localStorage.setItem('playerName', name); } catch (e) { /* не страшно */ }
+  try { localStorage.setItem('playerName', name); } catch (e) {}
   started = true;
   lastTime = 0;
   startOverlay.style.display = 'none';
@@ -274,12 +200,12 @@ function startGame() {
 document.getElementById('startBtn').addEventListener('click', startGame);
 nameInput.addEventListener('keydown', e => { if (e.key === 'Enter') startGame(); });
 
-// ---------- Звук (простые бипы через Web Audio — заглушка вместо сэмплов) ----------
+// ---------- Звук ----------
 let audioCtx = null;
 let soundEnabled = true;
 function ensureAudio() {
   if (!audioCtx) {
-    try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { /* нет поддержки — молча игнорируем */ }
+    try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {}
   } else if (audioCtx.state === 'suspended') {
     audioCtx.resume();
   }
@@ -304,40 +230,25 @@ function sfxShoot()     { beep(760, 0.045, 'square', 0.04); }
 function sfxHit()       { beep(180, 0.06, 'sawtooth', 0.07); }
 function sfxDeath()     { beep(110, 0.14, 'sawtooth', 0.09); }
 function sfxPickup()    { beep(700, 0.16, 'sine', 0.10); }
+function sfxBad()       { beep(150, 0.2, 'square', 0.10); }
 function sfxDamage()    { beep(90, 0.12, 'square', 0.10); }
 function sfxEnemyShot() { beep(320, 0.05, 'triangle', 0.05); }
+function sfxBoom()      { beep(55, 0.35, 'sawtooth', 0.14); }
 
-function triggerShake(amount) {
-  shakeIntensity = Math.max(shakeIntensity, amount);
+function triggerShake(amount) { shakeIntensity = Math.max(shakeIntensity, amount); }
+
+const toastEl = document.getElementById('toast');
+function showToast(text, good) {
+  toastEl.textContent = text;
+  toastEl.style.color = good ? '#7CFC00' : '#ff6b81';
+  toastEl.style.opacity = 1;
+  toastT = 1.8;
 }
 
-// ---------- Темы/стилистика ----------
-// Вся "визуальная личность" игры вынесена сюда. Пока это только цвета и подписи
-// (заглушки вместо арта) — когда появятся PNG под конкретную тему, сюда же
-// добавятся пути к спрайтам, и вся остальная логика останется без изменений.
+// ---------- Темы ----------
 const THEMES = {
-  desert: {
-    label: 'Пустыня',
-    enemyLabel: 'Монстр',
-    playerLabel: 'Солдат',
-    playerColor: '#4ecdc4',
-    enemyHueBase: 350,
-    bgColor: '#0d1117',
-    gridColor: '#1e2030',
-    wallColor: '#e94560',
-    crateColor: '#7CFC00'
-  },
-  office: {
-    label: 'Офис',
-    enemyLabel: 'Коллега',
-    playerLabel: 'Новичок',
-    playerColor: '#f4a261',
-    enemyHueBase: 210,
-    bgColor: '#1a1a2e',
-    gridColor: '#2a2a44',
-    wallColor: '#457b9d',
-    crateColor: '#ffd93d'
-  }
+  desert: { label: 'Пустыня', enemyLabel: 'Монстр',  playerLabel: 'Солдат',  playerColor: '#4ecdc4', enemyHueBase: 350, bgColor: '#0d1117', gridColor: '#1e2030', wallColor: '#e94560' },
+  office: { label: 'Офис',    enemyLabel: 'Коллега', playerLabel: 'Новичок', playerColor: '#f4a261', enemyHueBase: 210, bgColor: '#1a1a2e', gridColor: '#2a2a44', wallColor: '#457b9d' }
 };
 let currentTheme = 'desert';
 
@@ -350,25 +261,185 @@ function switchTheme(name) {
   });
 }
 
+// ---------- Баффы и дебаффы ----------
+const GOOD = [
+  { id: 'rate_up',    label: 'Скорострельность+', dur: 8, sym: 'F' },
+  { id: 'speed_up',   label: 'Скорость+',         dur: 8, sym: 'S' },
+  { id: 'heal',       label: 'Лечение +20',       sym: '+' },
+  { id: 'dmg_up',     label: 'Двойной урон',      dur: 8, sym: 'D' },
+  { id: 'shield',     label: 'Щит',               dur: 6, sym: 'O' }
+];
+const BAD = [
+  { id: 'rate_down',  label: 'Скорострельность−', dur: 8, sym: 'F' },
+  { id: 'speed_down', label: 'Скорость−',         dur: 8, sym: 'S' },
+  { id: 'hurt',       label: 'Урон −20 HP',       sym: '–' },
+  { id: 'invert',     label: 'Инверсия управления', dur: 5, sym: '?' },
+  { id: 'rage',       label: 'Враги в ярости',    dur: 8, sym: '!' }
+];
+const hasFx = id => (player.fx[id] || 0) > 0;
+
+function makeCrate(x, y, forceGood) {
+  const good = forceGood || Math.random() < 0.6;
+  const list = good ? GOOD : BAD;
+  return { x, y, good, def: list[Math.floor(Math.random() * list.length)], bobPhase: 0 };
+}
+
+function collectPickup(p) {
+  const d = p.def;
+  if (d.id === 'heal') player.hp = Math.min(player.maxHp, player.hp + HEAL_AMOUNT);
+  else if (d.id === 'hurt') { player.hp -= 20; triggerShake(6); }
+  else player.fx[d.id] = d.dur;
+  spawnParticles(p.x, p.y, p.good ? '#7CFC00' : '#ff4d6d');
+  showToast(d.label, p.good);
+  p.good ? sfxPickup() : sfxBad();
+}
+
 // ---------- Типы врагов ----------
-// Каждый тип — набор множителей поверх базовых характеристик + форма для
-// визуального отличия без арта. hueOffset красит их по-разному поверх темы.
 const ENEMY_TYPES = {
-  chaser:  { hpBase: 2,  sizeMult: 1,    speedMult: 1,   contactDpsMult: 1,   minWave: 1,  hueOffset: 0,   shape: 'square' },
-  runner:  { hpBase: 1,  sizeMult: 0.7,  speedMult: 1.8, contactDpsMult: 0.6, minWave: 3,  hueOffset: 60,  shape: 'diamond' },
-  giant:   { hpBase: 10, sizeMult: 2.1,  speedMult: 0.45,contactDpsMult: 2.2, minWave: 10, hueOffset: 140, shape: 'circle' },
-  shooter: { hpBase: 2,  sizeMult: 0.9,  speedMult: 0.8, contactDpsMult: 0.7, minWave: 7,  hueOffset: 210, shape: 'triangle',
+  chaser:  { hpBase: 2,  sizeMult: 1,   speedMult: 1,    contactDpsMult: 1,   minWave: 1,  hueOffset: 0,   shape: 'square' },
+  runner:  { hpBase: 1,  sizeMult: 0.7, speedMult: 1.8,  contactDpsMult: 0.6, minWave: 3,  hueOffset: 60,  shape: 'diamond' },
+  giant:   { hpBase: 10, sizeMult: 2.1, speedMult: 0.45, contactDpsMult: 2.2, minWave: 10, hueOffset: 140, shape: 'circle' },
+  shooter: { hpBase: 2,  sizeMult: 0.9, speedMult: 0.8,  contactDpsMult: 0.7, minWave: 7,  hueOffset: 210, shape: 'triangle',
              ranged: true, shootRange: 320, shootInterval: 1.8, bulletSpeed: 260, bulletDamage: 8 }
 };
-
 function pickEnemyType() {
   const available = Object.keys(ENEMY_TYPES).filter(k => wave >= ENEMY_TYPES[k].minWave);
   return available[Math.floor(Math.random() * available.length)];
 }
+function enemiesPerWave(w) { return Math.min(24, 4 + w * 2); }
 
-// сколько врагов нужно зачистить за волну, чтобы началась следующая
-function enemiesPerWave(w) {
-  return Math.min(24, 4 + w * 2);
+// ---------- Боссы ----------
+// Каждый следующий босс другой: цикл из 4 типов, дальше те же типы, но сильнее.
+const BOSS_DEFS = [
+  { name: 'Гренадёр', color: '#ff9f1c', shape: 'square',   attacks: ['grenade'] },
+  { name: 'Прыгун',   color: '#9b5de5', shape: 'circle',   attacks: ['jump'] },
+  { name: 'Метатель', color: '#00bbf9', shape: 'triangle', attacks: ['throw'] },
+  { name: 'Хаос',     color: '#f15bb5', shape: 'diamond',  attacks: ['grenade', 'jump', 'throw'] }
+];
+const THROWS = [
+  { shape: 'square',   spd: 380, r: 7,  dmg: 8,  color: '#ff5566' },
+  { shape: 'triangle', spd: 260, r: 9,  dmg: 10, color: '#ffd166' },
+  { shape: 'circle',   spd: 170, r: 16, dmg: 14, color: '#c77dff' }
+];
+const GRENADE_SPEED = 230;
+
+function spawnBoss() {
+  const n = wave / BOSS_EVERY - 1;
+  const def = BOSS_DEFS[n % BOSS_DEFS.length];
+  const hp = 80 + n * 40;
+  boss = {
+    def, n, hp, maxHp: hp, size: 56, speed: 55 + n * 6, atk: 1.5, jump: null, hitFlash: 0,
+    x: player.x < WORLD_W / 2 ? WORLD_W - 200 : 200,
+    y: player.y < WORLD_H / 2 ? WORLD_H - 200 : 200
+  };
+  showToast('БОСС: ' + def.name + '!', false);
+  sfxBoom();
+}
+
+function bossAttack() {
+  const a = boss.def.attacks[Math.floor(Math.random() * boss.def.attacks.length)];
+  const ang = Math.atan2(player.y - boss.y, player.x - boss.x);
+  const dist = Math.hypot(player.x - boss.x, player.y - boss.y);
+  if (a === 'grenade') {
+    // бомба летит в сторону игрока и на полпути/у цели раскалывается на осколки
+    const count = 1 + Math.floor(boss.n / 2);
+    for (let i = 0; i < count; i++) {
+      const aa = ang + (i - (count - 1) / 2) * 0.3;
+      enemyBullets.push({
+        x: boss.x, y: boss.y, vx: Math.cos(aa) * GRENADE_SPEED, vy: Math.sin(aa) * GRENADE_SPEED,
+        bomb: true, fuse: Math.min(dist, 420) * (0.6 + Math.random() * 0.4), damage: 0, r: 0
+      });
+    }
+    sfxEnemyShot();
+  } else if (a === 'throw') {
+    const count = 5 + Math.floor(boss.n / 2);
+    for (let i = 0; i < count; i++) {
+      const t = THROWS[Math.floor(Math.random() * THROWS.length)];
+      const aa = ang + (Math.random() - 0.5) * 0.9;
+      enemyBullets.push({
+        x: boss.x, y: boss.y, vx: Math.cos(aa) * t.spd, vy: Math.sin(aa) * t.spd,
+        damage: t.dmg, r: t.r, shape: t.shape, color: t.color
+      });
+    }
+    sfxEnemyShot();
+  } else if (a === 'jump') {
+    boss.jump = {
+      t: 0, dur: 0.9, sx: boss.x, sy: boss.y,
+      tx: Math.max(60, Math.min(WORLD_W - 60, player.x)),
+      ty: Math.max(60, Math.min(WORLD_H - 60, player.y))
+    };
+  }
+}
+
+function explodeBomb(b) {
+  const count = 8 + (boss ? boss.n * 2 : 0);
+  const off = Math.random() * Math.PI * 2;
+  for (let i = 0; i < count; i++) {
+    const a = off + (i / count) * Math.PI * 2;
+    enemyBullets.push({
+      x: b.x, y: b.y, vx: Math.cos(a) * 230, vy: Math.sin(a) * 230,
+      damage: 10, r: 5, shape: 'diamond', color: '#ffb703'
+    });
+  }
+  spawnParticles(b.x, b.y, '#ffb703');
+  sfxBoom();
+}
+
+function updateBoss(dt) {
+  boss.hitFlash = Math.max(0, boss.hitFlash - dt);
+  if (boss.jump) {
+    const j = boss.jump;
+    j.t += dt;
+    const p = Math.min(1, j.t / j.dur);
+    boss.x = j.sx + (j.tx - j.sx) * p;
+    boss.y = j.sy + (j.ty - j.sy) * p;
+    if (p >= 1) {
+      // приземление → звуковая волна: чем дальше игрок, тем меньше урон
+      shockwaves.push({ x: boss.x, y: boss.y, r: 0, max: 380 + boss.n * 25, hit: false });
+      triggerShake(14);
+      sfxBoom();
+      boss.jump = null;
+      boss.atk = 1.4;
+    }
+    return;
+  }
+  const ang = Math.atan2(player.y - boss.y, player.x - boss.x);
+  const dist = Math.hypot(player.x - boss.x, player.y - boss.y);
+  if (dist > 240) {
+    boss.x += Math.cos(ang) * boss.speed * dt;
+    boss.y += Math.sin(ang) * boss.speed * dt;
+  }
+  boss.atk -= dt;
+  if (boss.atk <= 0) {
+    bossAttack();
+    if (!boss.jump) boss.atk = Math.max(1.1, 2.6 - boss.n * 0.2);
+  }
+  if (dist < boss.size / 2 + PLAYER_SIZE / 2) damagePlayer(CONTACT_DPS * 2 * dt, 3);
+}
+
+function killBoss() {
+  for (let i = 0; i < 6; i++) spawnParticles(boss.x, boss.y, boss.def.color);
+  player.guns = Math.min(MAX_GUNS, player.guns + 1);
+  pickups.push(makeCrate(boss.x, boss.y, true));
+  score += 500 * (boss.n + 1);
+  enemyBullets = [];
+  shockwaves = [];
+  triggerShake(16);
+  sfxDeath(); sfxBoom();
+  showToast(player.guns > 1 ? 'Босс повержен! Стволов: ' + player.guns : 'Босс повержен!', true);
+  boss = null;
+}
+
+// ---------- Урон игроку ----------
+function damagePlayer(amount, shake) {
+  if (hasFx('shield')) return;
+  player.hp -= amount;
+  hurtFlag = true;
+  if (player.sprintCooldown <= 0) {
+    player.sprintTimer = SPRINT_DURATION;
+    player.sprintCooldown = SPRINT_COOLDOWN;
+  }
+  triggerShake(shake);
 }
 
 // ---------- Мир и камера ----------
@@ -376,18 +447,19 @@ let WORLD_W, WORLD_H;
 let camera = { x: 0, y: 0 };
 
 function updateCamera() {
-  camera.x = player.x - W / 2;
-  camera.y = player.y - H / 2;
-  camera.x = Math.max(0, Math.min(WORLD_W - W, camera.x));
-  camera.y = Math.max(0, Math.min(WORLD_H - H, camera.y));
+  camera.x = Math.max(0, Math.min(WORLD_W - VW, player.x - VW / 2));
+  camera.y = Math.max(0, Math.min(WORLD_H - VH, player.y - VH / 2));
 }
 
-// ---------- Адаптивный размер экрана ----------
 function resizeCanvas() {
   W = window.innerWidth;
   H = window.innerHeight;
   canvas.width = W;
   canvas.height = H;
+  // на телефоне меньшая сторона экрана ~400px → zoom ~0.67, камера видит дальше
+  zoom = Math.max(MIN_ZOOM, Math.min(1, Math.min(W, H) / VIEW_TARGET));
+  VW = W / zoom;
+  VH = H / zoom;
   if (player && WORLD_W) {
     player.x = Math.max(PLAYER_SIZE, Math.min(WORLD_W - PLAYER_SIZE, player.x));
     player.y = Math.max(PLAYER_SIZE, Math.min(WORLD_H - PLAYER_SIZE, player.y));
@@ -400,47 +472,33 @@ window.addEventListener('orientationchange', resizeCanvas);
 function init() {
   resizeCanvas();
   switchTheme(currentTheme);
-  WORLD_W = Math.max(2400, Math.round(W * 1.8));
-  WORLD_H = Math.max(1800, Math.round(H * 1.8));
-  player = { x: WORLD_W/2, y: WORLD_H/2, hp: 100, maxHp: 100, fireCooldown: 0, sprintTimer: 0, sprintCooldown: 0 };
-  bullets = [];
-  enemyBullets = [];
-  enemies = [];
-  particles = [];
-  score = 0;
-  runTime = 0;
-  scoreSubmitted = false;
+  WORLD_W = Math.max(2400, Math.round(VW * 1.8));
+  WORLD_H = Math.max(1800, Math.round(VH * 1.8));
+  player = { x: WORLD_W / 2, y: WORLD_H / 2, hp: 100, maxHp: 100, fireCooldown: 0, sprintTimer: 0, sprintCooldown: 0, guns: 1, fx: {} };
+  bullets = []; enemyBullets = []; enemies = []; particles = []; shockwaves = [];
+  score = 0; runTime = 0; scoreSubmitted = false;
   document.getElementById('submitStatus').textContent = '';
   document.getElementById('retrySubmitBtn').style.display = 'none';
-  wave = 1;
-  spawnTimer = 0;
+  wave = 1; spawnTimer = 0;
   waveEnemiesTotal = enemiesPerWave(wave);
-  waveEnemiesSpawned = 0;
-  waveBreakTimer = 0;
-  gameOver = false;
-  paused = false;
-  shakeIntensity = 0;
-  plane = null;
-  pickups = [];
+  waveEnemiesSpawned = 0; waveBreakTimer = 0;
+  gameOver = false; paused = false; shakeIntensity = 0;
+  plane = null; pickups = []; boss = null;
   updateCamera();
   document.getElementById('gameover').style.display = 'none';
   document.getElementById('pauseOverlay').style.display = 'none';
   document.getElementById('settingsOverlay').style.display = 'none';
 }
 
-// ---------- Ввод: клавиатура (для теста на компе) ----------
+// ---------- Ввод ----------
 window.addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
 window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
 
-// ---------- Ввод: виртуальный джойстик (тач) ----------
 let joystick = { active: false, id: null, baseX: 0, baseY: 0, knobX: 0, knobY: 0, dx: 0, dy: 0 };
 
 function touchPos(t) {
   const rect = canvas.getBoundingClientRect();
-  return {
-    x: (t.clientX - rect.left) * (W / rect.width),
-    y: (t.clientY - rect.top) * (H / rect.height)
-  };
+  return { x: (t.clientX - rect.left) * (W / rect.width), y: (t.clientY - rect.top) * (H / rect.height) };
 }
 
 canvas.addEventListener('touchstart', e => {
@@ -477,18 +535,17 @@ canvas.addEventListener('touchmove', e => {
 
 function endTouch(e) {
   for (const touch of e.changedTouches) {
-    if (touch.identifier === joystick.id) {
-      joystick.active = false; joystick.dx = 0; joystick.dy = 0;
-    }
+    if (touch.identifier === joystick.id) { joystick.active = false; joystick.dx = 0; joystick.dy = 0; }
   }
 }
 canvas.addEventListener('touchend', endTouch);
 canvas.addEventListener('touchcancel', endTouch);
 
 function restart() {
-  lastTime = 0;
+  const loopStopped = gameOver; // цикл останавливается только после смерти; иначе не плодим второй
   init();
-  requestAnimationFrame(loop);
+  lastTime = 0;
+  if (loopStopped) requestAnimationFrame(loop);
 }
 
 // ---------- Пауза и настройки ----------
@@ -522,19 +579,14 @@ document.getElementById('backToPauseBtn').addEventListener('click', () => {
 document.querySelectorAll('#themeButtons button').forEach(btn => {
   btn.addEventListener('click', () => switchTheme(btn.dataset.theme));
 });
-document.getElementById('soundToggle').addEventListener('change', e => {
-  soundEnabled = e.target.checked;
-});
+document.getElementById('soundToggle').addEventListener('change', e => { soundEnabled = e.target.checked; });
 window.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
     if (settingsOverlay.style.display === 'flex') {
       settingsOverlay.style.display = 'none';
       pauseOverlay.style.display = 'flex';
-    } else if (paused) {
-      closePause();
-    } else {
-      openPause();
-    }
+    } else if (paused) closePause();
+    else openPause();
   }
 });
 
@@ -544,39 +596,26 @@ function spawnPlane() {
   let startX, startY, endX, endY;
   const margin = 60;
   if (horizontal) {
-    const y = margin + Math.random() * (WORLD_H - margin*2);
-    const leftToRight = Math.random() < 0.5;
-    startX = leftToRight ? -margin : WORLD_W + margin;
-    endX = leftToRight ? WORLD_W + margin : -margin;
+    const y = margin + Math.random() * (WORLD_H - margin * 2);
+    const ltr = Math.random() < 0.5;
+    startX = ltr ? -margin : WORLD_W + margin;
+    endX = ltr ? WORLD_W + margin : -margin;
     startY = y; endY = y;
   } else {
-    const x = margin + Math.random() * (WORLD_W - margin*2);
-    const topToBottom = Math.random() < 0.5;
-    startY = topToBottom ? -margin : WORLD_H + margin;
-    endY = topToBottom ? WORLD_H + margin : -margin;
+    const x = margin + Math.random() * (WORLD_W - margin * 2);
+    const ttb = Math.random() < 0.5;
+    startY = ttb ? -margin : WORLD_H + margin;
+    endY = ttb ? WORLD_H + margin : -margin;
     startX = x; endX = x;
   }
   const dist = Math.hypot(endX - startX, endY - startY);
-  const duration = dist / PLANE_SPEED;
   const dropProgress = 0.4 + Math.random() * 0.2;
   plane = {
-    startX, startY, endX, endY, duration,
-    elapsed: 0,
-    x: startX, y: startY,
-    dropProgress,
-    dropped: false,
+    startX, startY, endX, endY, duration: dist / PLANE_SPEED,
+    elapsed: 0, x: startX, y: startY, dropProgress, dropped: false,
     dropX: startX + (endX - startX) * dropProgress,
     dropY: startY + (endY - startY) * dropProgress
   };
-}
-
-function collectPickup(p) {
-  if (p.type === 'heal') {
-    player.hp = Math.min(player.maxHp, player.hp + HEAL_AMOUNT);
-  }
-  // сюда позже добавятся типы 'ammo' и 'upgrade', когда появятся сами системы
-  spawnParticles(p.x, p.y, THEMES[currentTheme].crateColor);
-  sfxPickup();
 }
 
 // ---------- Спавн врагов ----------
@@ -584,18 +623,17 @@ function spawnEnemy() {
   const side = Math.floor(Math.random() * 4);
   let x, y;
   const margin = 40;
-  if (side === 0) { x = margin; y = margin + Math.random() * (WORLD_H - margin*2); }
-  else if (side === 1) { x = WORLD_W - margin; y = margin + Math.random() * (WORLD_H - margin*2); }
-  else if (side === 2) { x = margin + Math.random() * (WORLD_W - margin*2); y = margin; }
-  else { x = margin + Math.random() * (WORLD_W - margin*2); y = WORLD_H - margin; }
+  if (side === 0) { x = margin; y = margin + Math.random() * (WORLD_H - margin * 2); }
+  else if (side === 1) { x = WORLD_W - margin; y = margin + Math.random() * (WORLD_H - margin * 2); }
+  else if (side === 2) { x = margin + Math.random() * (WORLD_W - margin * 2); y = margin; }
+  else { x = margin + Math.random() * (WORLD_W - margin * 2); y = WORLD_H - margin; }
 
   const typeKey = pickEnemyType();
   const type = ENEMY_TYPES[typeKey];
   const speedMult = 1 + (wave - 1) * 0.12;
   const hueBase = THEMES[currentTheme].enemyHueBase;
   enemies.push({
-    type: typeKey,
-    x, y,
+    type: typeKey, x, y,
     hp: type.hpBase + Math.floor(wave / 3),
     speed: ENEMY_BASE_SPEED * speedMult * type.speedMult,
     size: ENEMY_SIZE * type.sizeMult,
@@ -611,17 +649,16 @@ function update(dt) {
   if (gameOver) return;
 
   runTime += dt;
-  // очки капают каждую секунду просто за то, что вы живы — не за фраги
   score += (SCORE_BASE + (wave - 1) * SCORE_WAVE_GROWTH) * dt;
-
-  // затухание тряски экрана
   shakeIntensity = Math.max(0, shakeIntensity - SHAKE_DECAY * dt);
+  hurtFlag = false;
+  if (toastT > 0 && (toastT -= dt) <= 0) toastEl.style.opacity = 0;
+  for (const k in player.fx) player.fx[k] = Math.max(0, player.fx[k] - dt);
 
-  // --- движение игрока: джойстик (аналог) или клавиатура (цифровое) ---
+  // --- движение ---
   let dx = 0, dy = 0;
-  if (joystick.active) {
-    dx = joystick.dx; dy = joystick.dy;
-  } else {
+  if (joystick.active) { dx = joystick.dx; dy = joystick.dy; }
+  else {
     if (keys['w'] || keys['arrowup']) dy -= 1;
     if (keys['s'] || keys['arrowdown']) dy += 1;
     if (keys['a'] || keys['arrowleft']) dx -= 1;
@@ -629,102 +666,113 @@ function update(dt) {
     const len = Math.hypot(dx, dy) || 1;
     dx /= len; dy /= len;
   }
-  // мини-спринт: если недавно получили урон, двигаемся быстрее — шанс вырваться
+  if (hasFx('invert')) { dx = -dx; dy = -dy; }
   player.sprintTimer = Math.max(0, player.sprintTimer - dt);
   player.sprintCooldown = Math.max(0, player.sprintCooldown - dt);
-  const sprintMult = player.sprintTimer > 0 ? SPRINT_MULT : 1;
+  const speedMult = (player.sprintTimer > 0 ? SPRINT_MULT : 1) * (hasFx('speed_up') ? 1.35 : 1) * (hasFx('speed_down') ? 0.65 : 1);
 
-  player.x += dx * PLAYER_SPEED * sprintMult * dt;
-  player.y += dy * PLAYER_SPEED * sprintMult * dt;
+  player.x += dx * PLAYER_SPEED * speedMult * dt;
+  player.y += dy * PLAYER_SPEED * speedMult * dt;
   player.x = Math.max(PLAYER_SIZE, Math.min(WORLD_W - PLAYER_SIZE, player.x));
   player.y = Math.max(PLAYER_SIZE, Math.min(WORLD_H - PLAYER_SIZE, player.y));
   updateCamera();
 
-  // --- автострельба по ближайшему врагу ---
+  // --- автострельба (враги + босс), по player.guns стволов ---
   player.fireCooldown -= dt;
-  if (player.fireCooldown <= 0 && enemies.length > 0) {
-    let nearest = enemies[0], nd = Infinity;
-    for (const e of enemies) {
+  const targets = boss ? enemies.concat([boss]) : enemies;
+  if (player.fireCooldown <= 0 && targets.length > 0) {
+    let nearest = targets[0], nd = Infinity;
+    for (const e of targets) {
       const d = Math.hypot(e.x - player.x, e.y - player.y);
       if (d < nd) { nd = d; nearest = e; }
     }
     const angle = Math.atan2(nearest.y - player.y, nearest.x - player.x);
-    bullets.push({
-      x: player.x, y: player.y,
-      vx: Math.cos(angle) * BULLET_SPEED,
-      vy: Math.sin(angle) * BULLET_SPEED
-    });
-    player.fireCooldown = FIRE_RATE;
+    const px = -Math.sin(angle), py = Math.cos(angle);
+    const dmg = hasFx('dmg_up') ? 2 : 1;
+    for (let i = 0; i < player.guns; i++) {
+      const o = (i - (player.guns - 1) / 2) * 12;
+      bullets.push({
+        x: player.x + px * o, y: player.y + py * o,
+        vx: Math.cos(angle) * BULLET_SPEED, vy: Math.sin(angle) * BULLET_SPEED, dmg
+      });
+    }
+    player.fireCooldown = FIRE_RATE * (hasFx('rate_up') ? 0.6 : 1) * (hasFx('rate_down') ? 1.7 : 1);
     sfxShoot();
   }
 
-  // --- пули игрока ---
   bullets = bullets.filter(b => {
     b.x += b.vx * dt; b.y += b.vy * dt;
-    return b.x > -10 && b.x < WORLD_W+10 && b.y > -10 && b.y < WORLD_H+10;
+    return b.x > -10 && b.x < WORLD_W + 10 && b.y > -10 && b.y < WORLD_H + 10;
   });
 
-  // --- враги: движение (с учётом типа) + стрельба у дальнобойных ---
+  // --- враги ---
+  const rage = hasFx('rage') ? 1.4 : 1;
   for (const e of enemies) {
     const type = ENEMY_TYPES[e.type];
     e.hitFlash = Math.max(0, e.hitFlash - dt);
     const angle = Math.atan2(player.y - e.y, player.x - e.x);
     const dist = Math.hypot(player.x - e.x, player.y - e.y);
-
+    const sp = e.speed * rage;
     if (type.ranged) {
-      if (dist > type.shootRange * 0.85) {
-        e.x += Math.cos(angle) * e.speed * dt;
-        e.y += Math.sin(angle) * e.speed * dt;
-      } else if (dist < type.shootRange * 0.5) {
-        e.x -= Math.cos(angle) * e.speed * dt;
-        e.y -= Math.sin(angle) * e.speed * dt;
-      }
+      if (dist > type.shootRange * 0.85) { e.x += Math.cos(angle) * sp * dt; e.y += Math.sin(angle) * sp * dt; }
+      else if (dist < type.shootRange * 0.5) { e.x -= Math.cos(angle) * sp * dt; e.y -= Math.sin(angle) * sp * dt; }
       e.fireTimer -= dt;
       if (e.fireTimer <= 0 && dist < type.shootRange) {
         enemyBullets.push({
-          x: e.x, y: e.y,
-          vx: Math.cos(angle) * type.bulletSpeed,
-          vy: Math.sin(angle) * type.bulletSpeed,
+          x: e.x, y: e.y, vx: Math.cos(angle) * type.bulletSpeed, vy: Math.sin(angle) * type.bulletSpeed,
           damage: type.bulletDamage
         });
         e.fireTimer = type.shootInterval;
         sfxEnemyShot();
       }
     } else {
-      e.x += Math.cos(angle) * e.speed * dt;
-      e.y += Math.sin(angle) * e.speed * dt;
+      e.x += Math.cos(angle) * sp * dt;
+      e.y += Math.sin(angle) * sp * dt;
     }
   }
 
-  // --- пули врагов: полёт + попадание по игроку ---
-  let damagedThisFrame = false;
+  // --- босс ---
+  if (boss) updateBoss(dt);
+
+  // --- пули врагов и бомбы ---
   enemyBullets = enemyBullets.filter(b => {
     b.x += b.vx * dt; b.y += b.vy * dt;
-    if (Math.hypot(b.x - player.x, b.y - player.y) < PLAYER_SIZE/2 + 4) {
-      player.hp -= b.damage;
-      damagedThisFrame = true;
-      if (player.sprintCooldown <= 0) {
-        player.sprintTimer = SPRINT_DURATION;
-        player.sprintCooldown = SPRINT_COOLDOWN;
-      }
-      triggerShake(8);
+    if (b.bomb) {
+      b.fuse -= GRENADE_SPEED * dt;
+      if (b.fuse <= 0) { explodeBomb(b); return false; }
+      return true;
+    }
+    if (Math.hypot(b.x - player.x, b.y - player.y) < PLAYER_SIZE / 2 + (b.r || 4)) {
+      damagePlayer(b.damage, 8);
       return false;
     }
-    return b.x > -10 && b.x < WORLD_W+10 && b.y > -10 && b.y < WORLD_H+10;
+    return b.x > -20 && b.x < WORLD_W + 20 && b.y > -20 && b.y < WORLD_H + 20;
   });
 
-  // --- коллизии: пуля игрока — враг (с отбрасыванием и вспышкой) ---
+  // --- звуковые волны босса ---
+  shockwaves = shockwaves.filter(s => {
+    s.r += 320 * dt;
+    const d = Math.hypot(player.x - s.x, player.y - s.y);
+    if (!s.hit && s.r >= d && d <= s.max) {
+      s.hit = true;
+      damagePlayer(8 + 32 * (1 - d / s.max), 10); // вплотную ~40, на краю ~8
+    }
+    return s.r < s.max;
+  });
+
+  // --- пули игрока → враги ---
   for (let i = enemies.length - 1; i >= 0; i--) {
     const e = enemies[i];
     for (let j = bullets.length - 1; j >= 0; j--) {
       const b = bullets[j];
-      if (Math.hypot(e.x - b.x, e.y - b.y) < e.size/2 + 4) {
+      if (Math.hypot(e.x - b.x, e.y - b.y) < e.size / 2 + 4) {
         bullets.splice(j, 1);
-        e.hp--;
+        e.hp -= b.dmg || 1;
         e.hitFlash = HIT_FLASH_DURATION;
         spawnParticles(e.x, e.y, e.color);
         sfxHit();
         if (e.hp <= 0) {
+          if (Math.random() < ENEMY_DROP_CHANCE) pickups.push(makeCrate(e.x, e.y));
           enemies.splice(i, 1);
           sfxDeath();
         }
@@ -733,20 +781,29 @@ function update(dt) {
     }
   }
 
-  // --- коллизии: враг-игрок (контактный урон) ---
-  for (const e of enemies) {
-    if (Math.hypot(e.x - player.x, e.y - player.y) < e.size/2 + PLAYER_SIZE/2) {
-      player.hp -= e.contactDps * dt;
-      damagedThisFrame = true;
-      if (player.sprintCooldown <= 0) {
-        player.sprintTimer = SPRINT_DURATION;
-        player.sprintCooldown = SPRINT_COOLDOWN;
+  // --- пули игрока → босс ---
+  if (boss) {
+    for (let j = bullets.length - 1; j >= 0; j--) {
+      const b = bullets[j];
+      if (Math.hypot(boss.x - b.x, boss.y - b.y) < boss.size / 2 + 4) {
+        bullets.splice(j, 1);
+        boss.hp -= b.dmg || 1;
+        boss.hitFlash = HIT_FLASH_DURATION;
+        spawnParticles(boss.x, boss.y, boss.def.color);
+        sfxHit();
+        if (boss.hp <= 0) { killBoss(); break; }
       }
-      triggerShake(3);
     }
   }
 
-  if (damagedThisFrame) {
+  // --- контакт враг-игрок ---
+  for (const e of enemies) {
+    if (Math.hypot(e.x - player.x, e.y - player.y) < e.size / 2 + PLAYER_SIZE / 2) {
+      damagePlayer(e.contactDps * dt, 3);
+    }
+  }
+
+  if (hurtFlag) {
     if (!update.dmgCooldown || update.dmgCooldown <= 0) {
       sfxDamage();
       update.dmgCooldown = DAMAGE_SOUND_COOLDOWN;
@@ -762,14 +819,12 @@ function update(dt) {
     submitScore();
   }
 
-  // --- частицы ---
   particles = particles.filter(p => {
     p.x += p.vx * dt * 60; p.y += p.vy * dt * 60; p.life -= dt;
     return p.life > 0;
   });
 
-  // --- спавн волнами ---
-  // --- спавн волны: не начинаем следующую, пока текущая не зачищена целиком ---
+  // --- волны: босс каждые BOSS_EVERY волн, следующая волна — только после его смерти ---
   if (waveBreakTimer > 0) {
     waveBreakTimer -= dt;
   } else if (waveEnemiesSpawned < waveEnemiesTotal) {
@@ -780,20 +835,18 @@ function update(dt) {
       waveEnemiesSpawned++;
       spawnTimer = 0;
     }
-  } else if (enemies.length === 0) {
-    // весь пул волны выбит подчистую — можно идти дальше
+  } else if (enemies.length === 0 && !boss) {
     wave++;
-    waveEnemiesTotal = enemiesPerWave(wave);
+    const isBossWave = wave % BOSS_EVERY === 0;
+    waveEnemiesTotal = isBossWave ? 0 : enemiesPerWave(wave);
     waveEnemiesSpawned = 0;
     spawnTimer = 0;
     waveBreakTimer = WAVE_BREAK;
-    // самолёт прилетает раз в PLANE_WAVE_INTERVAL волн, стартуя новую волну
-    if (!plane && wave % PLANE_WAVE_INTERVAL === 0) {
-      spawnPlane();
-    }
+    if (isBossWave) spawnBoss();
+    if (!plane && wave % PLANE_WAVE_INTERVAL === 0) spawnPlane();
   }
 
-  // --- самолёт со снабжением: летит, если запущен (см. триггер выше) ---
+  // --- самолёт ---
   if (plane) {
     plane.elapsed += dt;
     const progress = plane.elapsed / plane.duration;
@@ -801,17 +854,15 @@ function update(dt) {
     plane.y = plane.startY + (plane.endY - plane.startY) * progress;
     if (!plane.dropped && progress >= plane.dropProgress) {
       plane.dropped = true;
-      pickups.push({ x: plane.dropX, y: plane.dropY, type: 'heal', bobPhase: 0 });
+      pickups.push(makeCrate(plane.dropX, plane.dropY));
     }
-    if (progress >= 1) {
-      plane = null;
-    }
+    if (progress >= 1) plane = null;
   }
 
-  // --- ящики: анимация покачивания + подбор игроком ---
+  // --- ящики ---
   for (const p of pickups) p.bobPhase += dt * 3;
   pickups = pickups.filter(p => {
-    if (Math.hypot(p.x - player.x, p.y - player.y) < CRATE_SIZE/2 + PLAYER_SIZE/2) {
+    if (Math.hypot(p.x - player.x, p.y - player.y) < CRATE_SIZE / 2 + PLAYER_SIZE / 2) {
       collectPickup(p);
       return false;
     }
@@ -822,154 +873,173 @@ function update(dt) {
   document.getElementById('hp').textContent = Math.max(0, Math.ceil(player.hp));
   document.getElementById('score').textContent = Math.floor(score);
   document.getElementById('wave').textContent = wave;
-  document.getElementById('remaining').textContent = (waveEnemiesTotal - waveEnemiesSpawned) + enemies.length;
+  document.getElementById('remaining').textContent = boss ? 'БОСС' : (waveEnemiesTotal - waveEnemiesSpawned) + enemies.length;
+  let fxHtml = 'Стволы: ' + player.guns;
+  for (const d of GOOD.concat(BAD)) {
+    const t = player.fx[d.id];
+    if (t > 0) fxHtml += `<br><span style="color:${GOOD.includes(d) ? '#7CFC00' : '#ff6b81'}">${d.label} ${Math.ceil(t)}с</span>`;
+  }
+  document.getElementById('fx').innerHTML = fxHtml;
 }
 
 function spawnParticles(x, y, color) {
   for (let i = 0; i < 5; i++) {
     const angle = Math.random() * Math.PI * 2;
     const speed = Math.random() * 2 + 1;
-    particles.push({
-      x, y, vx: Math.cos(angle)*speed, vy: Math.sin(angle)*speed,
-      life: PARTICLE_LIFE, color
-    });
+    particles.push({ x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, life: PARTICLE_LIFE, color });
   }
 }
 
-// ---------- Отрисовка формы врага по типу (заглушки вместо спрайтов) ----------
-function drawEnemyShape(e) {
-  const type = ENEMY_TYPES[e.type];
-  const s = e.size;
-  ctx.fillStyle = e.hitFlash > 0 ? '#ffffff' : e.color;
+// ---------- Отрисовка ----------
+function drawShape(shape, x, y, s, color) {
+  ctx.fillStyle = color;
   ctx.save();
-  ctx.translate(e.x, e.y);
-  if (type.shape === 'diamond') {
+  ctx.translate(x, y);
+  if (shape === 'diamond') {
     ctx.rotate(Math.PI / 4);
-    ctx.fillRect(-s/2, -s/2, s, s);
-  } else if (type.shape === 'circle') {
-    ctx.beginPath();
-    ctx.arc(0, 0, s/2, 0, Math.PI*2);
-    ctx.fill();
-  } else if (type.shape === 'triangle') {
-    ctx.beginPath();
-    ctx.moveTo(0, -s/2);
-    ctx.lineTo(s/2, s/2);
-    ctx.lineTo(-s/2, s/2);
-    ctx.closePath();
-    ctx.fill();
+    ctx.fillRect(-s / 2, -s / 2, s, s);
+  } else if (shape === 'circle') {
+    ctx.beginPath(); ctx.arc(0, 0, s / 2, 0, Math.PI * 2); ctx.fill();
+  } else if (shape === 'triangle') {
+    ctx.beginPath(); ctx.moveTo(0, -s / 2); ctx.lineTo(s / 2, s / 2); ctx.lineTo(-s / 2, s / 2); ctx.closePath(); ctx.fill();
   } else {
-    ctx.fillRect(-s/2, -s/2, s, s);
+    ctx.fillRect(-s / 2, -s / 2, s, s);
   }
   ctx.restore();
 }
 
-// ---------- Отрисовка ----------
 function draw() {
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, W, H);
 
   const shakeX = shakeIntensity > 0 ? (Math.random() - 0.5) * shakeIntensity : 0;
   const shakeY = shakeIntensity > 0 ? (Math.random() - 0.5) * shakeIntensity : 0;
 
   ctx.save();
+  ctx.scale(zoom, zoom);
   ctx.translate(-camera.x + shakeX, -camera.y + shakeY);
 
-  // фон-сетка (заглушка вместо тайлов)
   ctx.strokeStyle = THEMES[currentTheme].gridColor;
   ctx.lineWidth = 1;
   const gridStartX = Math.floor(camera.x / 40) * 40;
   const gridStartY = Math.floor(camera.y / 40) * 40;
-  for (let x = gridStartX; x < camera.x + W; x += 40) {
-    ctx.beginPath(); ctx.moveTo(x, camera.y); ctx.lineTo(x, camera.y + H); ctx.stroke();
+  for (let x = gridStartX; x < camera.x + VW; x += 40) {
+    ctx.beginPath(); ctx.moveTo(x, camera.y); ctx.lineTo(x, camera.y + VH); ctx.stroke();
   }
-  for (let y = gridStartY; y < camera.y + H; y += 40) {
-    ctx.beginPath(); ctx.moveTo(camera.x, y); ctx.lineTo(camera.x + W, y); ctx.stroke();
+  for (let y = gridStartY; y < camera.y + VH; y += 40) {
+    ctx.beginPath(); ctx.moveTo(camera.x, y); ctx.lineTo(camera.x + VW, y); ctx.stroke();
   }
 
-  // стены-границы мира (заглушка вместо арт-барьера)
   ctx.strokeStyle = THEMES[currentTheme].wallColor;
   ctx.lineWidth = WALL_THICKNESS;
-  ctx.strokeRect(WALL_THICKNESS/2, WALL_THICKNESS/2, WORLD_W - WALL_THICKNESS, WORLD_H - WALL_THICKNESS);
+  ctx.strokeRect(WALL_THICKNESS / 2, WALL_THICKNESS / 2, WORLD_W - WALL_THICKNESS, WORLD_H - WALL_THICKNESS);
 
-  // частицы
-  for (const p of particles) {
-    ctx.fillStyle = p.color;
-    ctx.fillRect(p.x-2, p.y-2, 4, 4);
+  // звуковые волны
+  for (const s of shockwaves) {
+    ctx.strokeStyle = `rgba(255,217,61,${Math.max(0.2, 1 - s.r / s.max)})`;
+    ctx.lineWidth = 8;
+    ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2); ctx.stroke();
   }
 
-  // пули игрока
+  // маркер приземления босса
+  if (boss && boss.jump) {
+    ctx.strokeStyle = 'rgba(255,80,80,0.8)';
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(boss.jump.tx, boss.jump.ty, 30, 0, Math.PI * 2); ctx.stroke();
+  }
+
+  for (const p of particles) { ctx.fillStyle = p.color; ctx.fillRect(p.x - 2, p.y - 2, 4, 4); }
+
   ctx.fillStyle = '#ffd93d';
-  for (const b of bullets) {
-    ctx.fillRect(b.x-3, b.y-3, 6, 6);
-  }
+  for (const b of bullets) ctx.fillRect(b.x - 3, b.y - 3, 6, 6);
 
-  // пули врагов
-  ctx.fillStyle = '#ff5566';
+  // пули врагов / бомбы / осколки
   for (const b of enemyBullets) {
-    ctx.fillRect(b.x-3, b.y-3, 6, 6);
+    if (b.bomb) {
+      ctx.fillStyle = '#222';
+      ctx.beginPath(); ctx.arc(b.x, b.y, 11, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = Math.floor(performance.now() / 120) % 2 ? '#ff5566' : '#ffb703';
+      ctx.lineWidth = 3; ctx.stroke();
+    } else {
+      drawShape(b.shape || 'square', b.x, b.y, (b.r || 4) * 2, b.color || '#ff5566');
+    }
   }
 
-  // ящики со снабжением
+  // ящики: зелёные — баффы, красные — дебаффы
   for (const p of pickups) {
     const bob = Math.sin(p.bobPhase) * 4;
+    const col = p.good ? '#7CFC00' : '#ff4d6d';
     ctx.save();
     ctx.translate(p.x, p.y + bob);
-    ctx.rotate(Math.PI / 4);
-    ctx.fillStyle = THEMES[currentTheme].crateColor;
-    ctx.fillRect(-CRATE_SIZE/2, -CRATE_SIZE/2, CRATE_SIZE, CRATE_SIZE);
-    ctx.strokeStyle = '#0d1117';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(-CRATE_SIZE/2, -CRATE_SIZE/2, CRATE_SIZE, CRATE_SIZE);
+    ctx.fillStyle = col;
+    ctx.fillRect(-CRATE_SIZE / 2, -CRATE_SIZE / 2, CRATE_SIZE, CRATE_SIZE);
+    ctx.strokeStyle = '#0d1117'; ctx.lineWidth = 2;
+    ctx.strokeRect(-CRATE_SIZE / 2, -CRATE_SIZE / 2, CRATE_SIZE, CRATE_SIZE);
+    ctx.fillStyle = '#0d1117';
+    ctx.font = 'bold 16px Courier New'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(p.def.sym, 0, 1);
     ctx.restore();
   }
 
-  // враги — разная форма под тип
   for (const e of enemies) {
-    drawEnemyShape(e);
+    drawShape(ENEMY_TYPES[e.type].shape, e.x, e.y, e.size, e.hitFlash > 0 ? '#ffffff' : e.color);
   }
 
-  // самолёт: тень + силуэт (заглушки)
+  // босс (при прыжке — тень на земле + тело, подброшенное вверх)
+  if (boss) {
+    let lift = 0;
+    if (boss.jump) {
+      lift = Math.sin(Math.PI * Math.min(1, boss.jump.t / boss.jump.dur)) * 90;
+      ctx.fillStyle = 'rgba(0,0,0,0.4)';
+      ctx.beginPath(); ctx.ellipse(boss.x, boss.y, boss.size / 2, boss.size / 4, 0, 0, Math.PI * 2); ctx.fill();
+    }
+    drawShape(boss.def.shape, boss.x, boss.y - lift, boss.size, boss.hitFlash > 0 ? '#ffffff' : boss.def.color);
+    ctx.fillStyle = '#0d1117';
+    ctx.fillRect(boss.x - 12, boss.y - lift - 6, 7, 7);
+    ctx.fillRect(boss.x + 5, boss.y - lift - 6, 7, 7);
+  }
+
   if (plane) {
     ctx.fillStyle = 'rgba(0,0,0,0.35)';
-    ctx.beginPath();
-    ctx.ellipse(plane.x, plane.y, 30, 16, 0, 0, Math.PI*2);
-    ctx.fill();
-
+    ctx.beginPath(); ctx.ellipse(plane.x, plane.y, 30, 16, 0, 0, Math.PI * 2); ctx.fill();
     const angle = Math.atan2(plane.endY - plane.startY, plane.endX - plane.startX);
     ctx.save();
     ctx.translate(plane.x, plane.y);
     ctx.rotate(angle);
     ctx.fillStyle = '#cccccc';
-    ctx.beginPath();
-    ctx.moveTo(20, 0);
-    ctx.lineTo(-16, -10);
-    ctx.lineTo(-8, 0);
-    ctx.lineTo(-16, 10);
-    ctx.closePath();
-    ctx.fill();
+    ctx.beginPath(); ctx.moveTo(20, 0); ctx.lineTo(-16, -10); ctx.lineTo(-8, 0); ctx.lineTo(-16, 10); ctx.closePath(); ctx.fill();
     ctx.restore();
   }
 
   // игрок
   ctx.fillStyle = THEMES[currentTheme].playerColor;
-  ctx.fillRect(player.x - PLAYER_SIZE/2, player.y - PLAYER_SIZE/2, PLAYER_SIZE, PLAYER_SIZE);
+  ctx.fillRect(player.x - PLAYER_SIZE / 2, player.y - PLAYER_SIZE / 2, PLAYER_SIZE, PLAYER_SIZE);
   ctx.fillStyle = '#0d1117';
-  ctx.fillRect(player.x-6, player.y-4, 3, 3);
-  ctx.fillRect(player.x+3, player.y-4, 3, 3);
+  ctx.fillRect(player.x - 6, player.y - 4, 3, 3);
+  ctx.fillRect(player.x + 3, player.y - 4, 3, 3);
+  if (hasFx('shield')) {
+    ctx.strokeStyle = 'rgba(80,200,255,0.8)'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(player.x, player.y, PLAYER_SIZE, 0, Math.PI * 2); ctx.stroke();
+  }
 
   ctx.restore();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
 
-  // виртуальный джойстик — в координатах экрана, камера/тряска на него не влияют
+  // полоса HP босса (экранные координаты)
+  if (boss) {
+    const bw = Math.min(W * 0.7, 420), bx = (W - bw) / 2, by = 64;
+    ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(bx - 2, by - 2, bw + 4, 16);
+    ctx.fillStyle = boss.def.color; ctx.fillRect(bx, by, bw * Math.max(0, boss.hp / boss.maxHp), 12);
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 12px Courier New'; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+    ctx.fillText(boss.def.name, W / 2, by - 6);
+  }
+
+  // джойстик
   if (joystick.active) {
-    ctx.strokeStyle = 'rgba(255,255,255,0.4)';
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.arc(joystick.baseX, joystick.baseY, JOY_RADIUS, 0, Math.PI*2);
-    ctx.stroke();
-
+    ctx.strokeStyle = 'rgba(255,255,255,0.4)'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(joystick.baseX, joystick.baseY, JOY_RADIUS, 0, Math.PI * 2); ctx.stroke();
     ctx.fillStyle = 'rgba(255,255,255,0.5)';
-    ctx.beginPath();
-    ctx.arc(joystick.knobX, joystick.knobY, 22, 0, Math.PI*2);
-    ctx.fill();
+    ctx.beginPath(); ctx.arc(joystick.knobX, joystick.knobY, 22, 0, Math.PI * 2); ctx.fill();
   }
 }
 
