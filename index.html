@@ -137,6 +137,7 @@ const MAX_GUNS = 4;
 const ENEMY_DROP_CHANCE = 0.05;
 const VIEW_TARGET = 600; // сколько мировых единиц должно помещаться по МЕНЬШЕЙ стороне экрана
 const MIN_ZOOM = 0.45;
+const AUTO_RANGE = 380;  // дальность, на которой игрок видит цели и стреляет
 
 let lastTime = 0;
 
@@ -240,7 +241,7 @@ function triggerShake(amount) { shakeIntensity = Math.max(shakeIntensity, amount
 const toastEl = document.getElementById('toast');
 function showToast(text, good) {
   toastEl.textContent = text;
-  toastEl.style.color = good ? '#7CFC00' : '#ff6b81';
+  toastEl.style.color = good === 'neutral' ? '#ffd93d' : (good ? '#7CFC00' : '#ff6b81');
   toastEl.style.opacity = 1;
   toastT = 1.8;
 }
@@ -279,7 +280,7 @@ const BAD = [
 const hasFx = id => (player.fx[id] || 0) > 0;
 
 function makeCrate(x, y, forceGood) {
-  const good = forceGood || Math.random() < 0.6;
+  const good = forceGood || Math.random() < 0.75; // 75% бафф, 25% дебафф
   const list = good ? GOOD : BAD;
   return { x, y, good, def: list[Math.floor(Math.random() * list.length)], bobPhase: 0 };
 }
@@ -288,10 +289,10 @@ function collectPickup(p) {
   const d = p.def;
   if (d.id === 'heal') player.hp = Math.min(player.maxHp, player.hp + HEAL_AMOUNT);
   else if (d.id === 'hurt') { player.hp -= 20; triggerShake(6); }
-  else player.fx[d.id] = d.dur;
-  spawnParticles(p.x, p.y, p.good ? '#7CFC00' : '#ff4d6d');
-  showToast(d.label, p.good);
-  p.good ? sfxPickup() : sfxBad();
+  else player.fx[d.id] = 15 + Math.random() * 5; // 15–20 секунд
+  spawnParticles(p.x, p.y, '#ffd93d');
+  showToast(d.label, 'neutral');
+  sfxPickup(); // один и тот же звук для баффов и дебаффов
 }
 
 // ---------- Типы врагов ----------
@@ -321,12 +322,12 @@ const THROWS = [
   { shape: 'triangle', spd: 260, r: 9,  dmg: 10, color: '#ffd166' },
   { shape: 'circle',   spd: 170, r: 16, dmg: 14, color: '#c77dff' }
 ];
-const GRENADE_SPEED = 230;
+const GRENADE_SPEED = 380;
 
 function spawnBoss() {
   const n = wave / BOSS_EVERY - 1;
   const def = BOSS_DEFS[n % BOSS_DEFS.length];
-  const hp = 80 + n * 40;
+  const hp = 220 + n * 110;
   boss = {
     def, n, hp, maxHp: hp, size: 56, speed: 55 + n * 6, atk: 1.5, jump: null, hitFlash: 0,
     x: player.x < WORLD_W / 2 ? WORLD_W - 200 : 200,
@@ -341,13 +342,13 @@ function bossAttack() {
   const ang = Math.atan2(player.y - boss.y, player.x - boss.x);
   const dist = Math.hypot(player.x - boss.x, player.y - boss.y);
   if (a === 'grenade') {
-    // бомба летит в сторону игрока и на полпути/у цели раскалывается на осколки
+    // бомба летит в сторону игрока и у цели раскалывается на осколки
     const count = 1 + Math.floor(boss.n / 2);
     for (let i = 0; i < count; i++) {
       const aa = ang + (i - (count - 1) / 2) * 0.3;
       enemyBullets.push({
         x: boss.x, y: boss.y, vx: Math.cos(aa) * GRENADE_SPEED, vy: Math.sin(aa) * GRENADE_SPEED,
-        bomb: true, fuse: Math.min(dist, 420) * (0.6 + Math.random() * 0.4), damage: 0, r: 0
+        bomb: true, fuse: Math.max(250, Math.min(dist, 750)) * (0.75 + Math.random() * 0.25), damage: 0, r: 0
       });
     }
     sfxEnemyShot();
@@ -363,22 +364,20 @@ function bossAttack() {
     }
     sfxEnemyShot();
   } else if (a === 'jump') {
-    boss.jump = {
-      t: 0, dur: 0.9, sx: boss.x, sy: boss.y,
-      tx: Math.max(60, Math.min(WORLD_W - 60, player.x)),
-      ty: Math.max(60, Math.min(WORLD_H - 60, player.y))
-    };
+    // быстрый прыжок: цель обновляется (следит за игроком) почти весь полёт
+    boss.jump = { t: 0, dur: 0.7, sx: boss.x, sy: boss.y, tx: boss.x, ty: boss.y };
   }
+  return a;
 }
 
 function explodeBomb(b) {
-  const count = 8 + (boss ? boss.n * 2 : 0);
+  const count = 12 + (boss ? boss.n * 2 : 0);
   const off = Math.random() * Math.PI * 2;
   for (let i = 0; i < count; i++) {
     const a = off + (i / count) * Math.PI * 2;
     enemyBullets.push({
-      x: b.x, y: b.y, vx: Math.cos(a) * 230, vy: Math.sin(a) * 230,
-      damage: 10, r: 5, shape: 'diamond', color: '#ffb703'
+      x: b.x, y: b.y, vx: Math.cos(a) * 320, vy: Math.sin(a) * 320,
+      damage: 12, r: 8, shape: 'diamond', color: '#ffb703'
     });
   }
   spawnParticles(b.x, b.y, '#ffb703');
@@ -391,15 +390,20 @@ function updateBoss(dt) {
     const j = boss.jump;
     j.t += dt;
     const p = Math.min(1, j.t / j.dur);
+    if (p < 0.7) { // следит за игроком, последние 30% полёта цель зафиксирована
+      j.tx = Math.max(60, Math.min(WORLD_W - 60, player.x));
+      j.ty = Math.max(60, Math.min(WORLD_H - 60, player.y));
+    }
     boss.x = j.sx + (j.tx - j.sx) * p;
     boss.y = j.sy + (j.ty - j.sy) * p;
     if (p >= 1) {
-      // приземление → звуковая волна: чем дальше игрок, тем меньше урон
-      shockwaves.push({ x: boss.x, y: boss.y, r: 0, max: 380 + boss.n * 25, hit: false });
+      // приземление → удар по площади + звуковая волна: чем дальше игрок, тем меньше урон
+      shockwaves.push({ x: boss.x, y: boss.y, r: 0, max: 480 + boss.n * 30, hit: false });
+      if (Math.hypot(player.x - boss.x, player.y - boss.y) < 70) damagePlayer(30, 12);
       triggerShake(14);
       sfxBoom();
       boss.jump = null;
-      boss.atk = 1.4;
+      boss.atk = 0.9;
     }
     return;
   }
@@ -411,8 +415,10 @@ function updateBoss(dt) {
   }
   boss.atk -= dt;
   if (boss.atk <= 0) {
-    bossAttack();
-    if (!boss.jump) boss.atk = Math.max(1.1, 2.6 - boss.n * 0.2);
+    const a = bossAttack();
+    if (!boss.jump) boss.atk = a === 'throw'
+      ? Math.max(0.5, 1.2 - boss.n * 0.1)
+      : Math.max(1.1, 2.6 - boss.n * 0.2);
   }
   if (dist < boss.size / 2 + PLAYER_SIZE / 2) damagePlayer(CONTACT_DPS * 2 * dt, 3);
 }
@@ -635,7 +641,8 @@ function spawnEnemy() {
   enemies.push({
     type: typeKey, x, y,
     hp: type.hpBase + Math.floor(wave / 3),
-    speed: ENEMY_BASE_SPEED * speedMult * type.speedMult,
+    // все, кроме тяжёлых (giant), бегут так же быстро, как игрок
+    speed: typeKey === 'giant' ? ENEMY_BASE_SPEED * speedMult * type.speedMult : PLAYER_SPEED,
     size: ENEMY_SIZE * type.sizeMult,
     contactDps: CONTACT_DPS * type.contactDpsMult,
     color: `hsl(${(hueBase + type.hueOffset - wave * 5 + 360) % 360}, 70%, 55%)`,
@@ -677,15 +684,15 @@ function update(dt) {
   player.y = Math.max(PLAYER_SIZE, Math.min(WORLD_H - PLAYER_SIZE, player.y));
   updateCamera();
 
-  // --- автострельба (враги + босс), по player.guns стволов ---
+  // --- автострельба (враги + босс) в пределах AUTO_RANGE, по player.guns стволов ---
   player.fireCooldown -= dt;
-  const targets = boss ? enemies.concat([boss]) : enemies;
-  if (player.fireCooldown <= 0 && targets.length > 0) {
-    let nearest = targets[0], nd = Infinity;
-    for (const e of targets) {
-      const d = Math.hypot(e.x - player.x, e.y - player.y);
-      if (d < nd) { nd = d; nearest = e; }
-    }
+  const allTargets = boss ? enemies.concat([boss]) : enemies;
+  let nearest = null, nd = AUTO_RANGE;
+  for (const e of allTargets) {
+    const d = Math.hypot(e.x - player.x, e.y - player.y);
+    if (d < nd) { nd = d; nearest = e; }
+  }
+  if (player.fireCooldown <= 0 && nearest) {
     const angle = Math.atan2(nearest.y - player.y, nearest.x - player.x);
     const px = -Math.sin(angle), py = Math.cos(angle);
     const dmg = hasFx('dmg_up') ? 2 : 1;
@@ -751,7 +758,7 @@ function update(dt) {
 
   // --- звуковые волны босса ---
   shockwaves = shockwaves.filter(s => {
-    s.r += 320 * dt;
+    s.r += 520 * dt;
     const d = Math.hypot(player.x - s.x, player.y - s.y);
     if (!s.hit && s.r >= d && d <= s.max) {
       s.hit = true;
@@ -877,7 +884,7 @@ function update(dt) {
   let fxHtml = 'Стволы: ' + player.guns;
   for (const d of GOOD.concat(BAD)) {
     const t = player.fx[d.id];
-    if (t > 0) fxHtml += `<br><span style="color:${GOOD.includes(d) ? '#7CFC00' : '#ff6b81'}">${d.label} ${Math.ceil(t)}с</span>`;
+    if (t > 0) fxHtml += `<br><span style="color:#ffd93d">${d.label} ${Math.ceil(t)}с</span>`;
   }
   document.getElementById('fx').innerHTML = fxHtml;
 }
@@ -957,7 +964,7 @@ function draw() {
   for (const b of enemyBullets) {
     if (b.bomb) {
       ctx.fillStyle = '#222';
-      ctx.beginPath(); ctx.arc(b.x, b.y, 11, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(b.x, b.y, 18, 0, Math.PI * 2); ctx.fill();
       ctx.strokeStyle = Math.floor(performance.now() / 120) % 2 ? '#ff5566' : '#ffb703';
       ctx.lineWidth = 3; ctx.stroke();
     } else {
@@ -965,10 +972,10 @@ function draw() {
     }
   }
 
-  // ящики: зелёные — баффы, красные — дебаффы
+  // ящики: все одинаковые, что внутри — неизвестно
   for (const p of pickups) {
     const bob = Math.sin(p.bobPhase) * 4;
-    const col = p.good ? '#7CFC00' : '#ff4d6d';
+    const col = '#ffd93d';
     ctx.save();
     ctx.translate(p.x, p.y + bob);
     ctx.fillStyle = col;
@@ -977,7 +984,7 @@ function draw() {
     ctx.strokeRect(-CRATE_SIZE / 2, -CRATE_SIZE / 2, CRATE_SIZE, CRATE_SIZE);
     ctx.fillStyle = '#0d1117';
     ctx.font = 'bold 16px Courier New'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(p.def.sym, 0, 1);
+    ctx.fillText('?', 0, 1);
     ctx.restore();
   }
 
@@ -1021,6 +1028,9 @@ function draw() {
     ctx.strokeStyle = 'rgba(80,200,255,0.8)'; ctx.lineWidth = 3;
     ctx.beginPath(); ctx.arc(player.x, player.y, PLAYER_SIZE, 0, Math.PI * 2); ctx.stroke();
   }
+  // дальность автоприцела (едва заметное кольцо)
+  ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(player.x, player.y, AUTO_RANGE, 0, Math.PI * 2); ctx.stroke();
 
   ctx.restore();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
