@@ -73,15 +73,15 @@
 <div id="startOverlay" class="overlay" style="display:flex;">
   <div class="panel">
     <h2>Введите имя</h2>
-    <p style="margin:0 0 4px;font-size:13px;">Имя и фамилия, чтобы мы знали, кому вручить награду</p>
-    <input id="nameInput" type="text" maxlength="20" placeholder="Например: Иван П." autocomplete="off">
+    <p style="margin:0 0 4px;font-size:13px;"></p>
+    <input id="nameInput" type="text" maxlength="20" placeholder="..." autocomplete="off">
     <p id="nameError"></p>
     <button id="startBtn">Играть</button>
   </div>
 </div>
 
 <div id="gameover">
-  <h1>ТЫ ПОЙМАН</h1>
+  <h1>WASTED</h1>
   <p>Счёт: <span id="finalScore">0</span></p>
   <p>Волна: <span id="finalWave">1</span></p>
   <p id="submitStatus"></p>
@@ -668,8 +668,6 @@ function spawnEnemy(forceType) {
     fireTimer: type.ranged ? Math.random() * type.shootInterval : 0
   });
 }
-
-// ---------- Обновление ----------
 function update(dt) {
   if (gameOver) return;
 
@@ -680,7 +678,6 @@ function update(dt) {
   if (toastT > 0 && (toastT -= dt) <= 0) toastEl.style.opacity = 0;
   for (const k in player.fx) player.fx[k] = Math.max(0, player.fx[k] - dt);
 
-  // --- движение ---
   let dx = 0, dy = 0;
   if (joystick.active) { dx = joystick.dx; dy = joystick.dy; }
   else {
@@ -696,7 +693,7 @@ function update(dt) {
   player.sprintCooldown = Math.max(0, player.sprintCooldown - dt);
   const speedMult = (player.sprintTimer > 0 ? SPRINT_MULT : 1) * (hasFx('speed_up') ? 1.35 : 1) * (hasFx('speed_down') ? 0.65 : 1);
 
-  player.vx = dx * PLAYER_SPEED * speedMult; // скорость нужна боссу для упреждения гранат
+  player.vx = dx * PLAYER_SPEED * speedMult;
   player.vy = dy * PLAYER_SPEED * speedMult;
   player.x += player.vx * dt;
   player.y += player.vy * dt;
@@ -704,7 +701,6 @@ function update(dt) {
   player.y = Math.max(PLAYER_SIZE, Math.min(WORLD_H - PLAYER_SIZE, player.y));
   updateCamera();
 
-  // --- автострельба (враги + босс) в пределах AUTO_RANGE, по player.guns стволов ---
   player.fireCooldown -= dt;
   const allTargets = boss ? enemies.concat([boss]) : enemies;
   let nearest = null, nd = AUTO_RANGE;
@@ -731,8 +727,6 @@ function update(dt) {
     b.x += b.vx * dt; b.y += b.vy * dt;
     return b.x > -10 && b.x < WORLD_W + 10 && b.y > -10 && b.y < WORLD_H + 10;
   });
-
-  // --- враги ---
   const rage = hasFx('rage') ? 1.4 : 1;
   for (const e of enemies) {
     const type = ENEMY_TYPES[e.type];
@@ -757,11 +751,7 @@ function update(dt) {
       e.y += Math.sin(angle) * sp * dt;
     }
   }
-
-  // --- босс ---
   if (boss) updateBoss(dt);
-
-  // --- пули врагов и бомбы (осколки собираем отдельно и добавляем ПОСЛЕ фильтра) ---
   const newShards = [];
   enemyBullets = enemyBullets.filter(b => {
     b.x += b.vx * dt; b.y += b.vy * dt;
@@ -777,19 +767,15 @@ function update(dt) {
     return b.x > -20 && b.x < WORLD_W + 20 && b.y > -20 && b.y < WORLD_H + 20;
   });
   if (newShards.length) enemyBullets = enemyBullets.concat(newShards);
-
-  // --- звуковые волны босса ---
   shockwaves = shockwaves.filter(s => {
     s.r += 340 * dt;
     const d = Math.hypot(player.x - s.x, player.y - s.y);
     if (!s.hit && s.r >= d && d <= s.max) {
       s.hit = true;
-      damagePlayer(6 + 24 * (1 - d / s.max), 10); // вплотную ~30, на краю ~6
+      damagePlayer(6 + 24 * (1 - d / s.max), 10);
     }
     return s.r < s.max;
   });
-
-  // --- пули игрока → враги ---
   for (let i = enemies.length - 1; i >= 0; i--) {
     const e = enemies[i];
     for (let j = bullets.length - 1; j >= 0; j--) {
