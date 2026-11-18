@@ -389,7 +389,7 @@ function bossAttack() {
     sfxEnemyShot();
   } else if (a === 'throw') {
     // очень широкий веер (~160°), центр — с небольшим упреждением. Кружить рядом уже не получится
-    const count = 9 + Math.floor(boss.n / 2);
+    const count = 20 + Math.floor(boss.n / 2);
     const spread = Math.PI * 0.9;
     const lead = dist / 300 * 0.6;
     const cAng = Math.atan2(player.y + player.vy * lead - boss.y, player.x + player.vx * lead - boss.x);
@@ -405,7 +405,7 @@ function bossAttack() {
   } else if (a === 'jump') {
     // прыжок в ПРЕДСКАЗАННУЮ точку: куда игрок придёт, если продолжит бежать так же.
     // k и jx/jy — небольшая неточность, чтобы прыжок был "примерно" туда
-    boss.jump = { t: 0, dur: 1.2, sx: boss.x, sy: boss.y, tx: boss.x, ty: boss.y,
+    boss.jump = { t: 0, dur: 1.1, sx: boss.x, sy: boss.y, tx: boss.x, ty: boss.y,
                   k: 0.8 + Math.random() * 0.25, jx: (Math.random() - 0.5) * 80, jy: (Math.random() - 0.5) * 80 };
   }
   return a;
