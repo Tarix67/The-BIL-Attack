@@ -107,6 +107,7 @@ let playerName = '';
 let scoreSubmitted = false;
 let shakeIntensity = 0;
 let hurtFlag = false;
+let hurtFlash = 0; // 0..HURT_FLASH_MAX — насколько экран сейчас красный
 let toastT = 0;
 let lastFxHtml = '';
 
@@ -134,6 +135,7 @@ const DAMAGE_SOUND_COOLDOWN = 0.35;
 const SPRINT_DURATION = 0.35;
 const SPRINT_MULT = 1.7;
 const SPRINT_COOLDOWN = 4;
+const HURT_FLASH_MAX = 0.3; // максимальная прозрачность красной вспышки (0.3 = "немного")
 const BOSS_EVERY = 5;
 const MAX_GUNS = 4;
 const ENEMY_DROP_CHANCE = 0.05;
@@ -311,7 +313,7 @@ function makeMedkit(x, y) {
 function collectPickup(p) {
   const d = p.def;
   if (d.id === 'heal') player.hp = Math.min(player.maxHp, player.hp + HEAL_AMOUNT);
-  else if (d.id === 'hurt') { player.hp -= 20; triggerShake(6); }
+  else if (d.id === 'hurt') { player.hp -= 20; flashHurt(20); triggerShake(6); }
   else player.fx[d.id] = d.dur;
   spawnParticles(p.x, p.y, '#ffd93d');
   showToast(d.label, 'neutral');
@@ -323,9 +325,11 @@ function collectPickup(p) {
 const ENEMY_TYPES = {
   chaser:  { hpBase: 2,  sizeMult: 1,   speedFrac: 0.60, speedCap: 0.95, contactDpsMult: 1,   minWave: 1,  hueOffset: 0,   shape: 'square' },
   runner:  { hpBase: 1,  sizeMult: 0.7, speedFrac: 0.95, speedCap: 1.00, contactDpsMult: 0.6, minWave: 3,  hueOffset: 60,  shape: 'diamond' },
-  giant:   { hpBase: 10, sizeMult: 2.1, speedFrac: 0.30, speedCap: 0.50, contactDpsMult: 2.2, minWave: 10, hueOffset: 140, shape: 'circle' },
+  giant:   { hpBase: 10, sizeMult: 2.1, speedFrac: 0.30, speedCap: 0.50, contactDpsMult: 2.2, minWave: 10, hueOffset: 140, shape: 'circle',
+             // прыгает рядом с игроком; при приземлении — небольшая звуковая волна
+             jumper: true, jumpCd: 3.0, jumpRange: 300, jumpDur: 0.65, waveMax: 150, waveDmgBase: 3, waveDmgVar: 11 },
   shooter: { hpBase: 2,  sizeMult: 0.9, speedFrac: 0.50, speedCap: 0.80, contactDpsMult: 0.7, minWave: 7,  hueOffset: 210, shape: 'triangle',
-             ranged: true, shootRange: 320, shootInterval: 1.8, bulletSpeed: 260, bulletDamage: 8 }
+             ranged: true, shootRange: AUTO_RANGE * 1.5, shootInterval: 1.8, bulletSpeed: 260, bulletDamage: 8 }
 };
 function pickEnemyType() {
   const available = Object.keys(ENEMY_TYPES).filter(k => wave >= ENEMY_TYPES[k].minWave);
@@ -384,10 +388,14 @@ function bossAttack() {
     }
     sfxEnemyShot();
   } else if (a === 'throw') {
-    const count = 5 + Math.floor(boss.n / 2);
+    // очень широкий веер (~160°), центр — с небольшим упреждением. Кружить рядом уже не получится
+    const count = 9 + Math.floor(boss.n / 2);
+    const spread = Math.PI * 0.9;
+    const lead = dist / 300 * 0.6;
+    const cAng = Math.atan2(player.y + player.vy * lead - boss.y, player.x + player.vx * lead - boss.x);
     for (let i = 0; i < count; i++) {
       const t = THROWS[Math.floor(Math.random() * THROWS.length)];
-      const aa = ang + (Math.random() - 0.5) * 0.9;
+      const aa = cAng + (count > 1 ? i / (count - 1) - 0.5 : 0) * spread + (Math.random() - 0.5) * 0.12;
       enemyBullets.push({
         x: boss.x, y: boss.y, vx: Math.cos(aa) * t.spd, vy: Math.sin(aa) * t.spd,
         damage: t.dmg, r: t.r, shape: t.shape, color: t.color
@@ -395,8 +403,10 @@ function bossAttack() {
     }
     sfxEnemyShot();
   } else if (a === 'jump') {
-    // быстрый прыжок: цель обновляется (следит за игроком) почти весь полёт
-    boss.jump = { t: 0, dur: 1.0, sx: boss.x, sy: boss.y, tx: boss.x, ty: boss.y };
+    // прыжок в ПРЕДСКАЗАННУЮ точку: куда игрок придёт, если продолжит бежать так же.
+    // k и jx/jy — небольшая неточность, чтобы прыжок был "примерно" туда
+    boss.jump = { t: 0, dur: 1.0, sx: boss.x, sy: boss.y, tx: boss.x, ty: boss.y,
+                  k: 0.8 + Math.random() * 0.25, jx: (Math.random() - 0.5) * 80, jy: (Math.random() - 0.5) * 80 };
   }
   return a;
 }
@@ -424,15 +434,16 @@ function updateBoss(dt) {
     const j = boss.jump;
     j.t += dt;
     const p = Math.min(1, j.t / j.dur);
-    if (p < 0.4) { // следит за игроком первые 40% полёта, потом цель фиксируется (0.6 с на уклонение)
-      j.tx = Math.max(60, Math.min(WORLD_W - 60, player.x));
-      j.ty = Math.max(60, Math.min(WORLD_H - 60, player.y));
+    if (p < 0.4) { // первые 40% полёта уточняет прогноз, потом цель фиксируется (0.6 с на то, чтобы свернуть)
+      const remain = Math.max(0, j.dur - j.t);
+      j.tx = Math.max(60, Math.min(WORLD_W - 60, player.x + player.vx * remain * j.k + j.jx));
+      j.ty = Math.max(60, Math.min(WORLD_H - 60, player.y + player.vy * remain * j.k + j.jy));
     }
     boss.x = j.sx + (j.tx - j.sx) * p;
     boss.y = j.sy + (j.ty - j.sy) * p;
     if (p >= 1) {
       // приземление → удар по площади + звуковая волна: чем дальше игрок, тем меньше урон
-      shockwaves.push({ x: boss.x, y: boss.y, r: 0, max: 400 + boss.n * 25, hit: false });
+      shockwaves.push({ x: boss.x, y: boss.y, r: 0, max: 400 + boss.n * 25, spd: 340, dmgBase: 6, dmgVar: 24, shake: 10, hit: false });
       if (Math.hypot(player.x - boss.x, player.y - boss.y) < 60) damagePlayer(25, 12);
       triggerShake(14);
       sfxBoom();
@@ -451,8 +462,8 @@ function updateBoss(dt) {
   if (boss.atk <= 0) {
     const a = bossAttack();
     if (!boss.jump) boss.atk = a === 'throw'
-      ? Math.max(0.5, 1.2 - boss.n * 0.1)
-      : Math.max(0.9, 2.0 - boss.n * 0.15);
+      ? Math.max(1.0, 1.9 - boss.n * 0.1)
+      : Math.max(1.2, 2.5 - boss.n * 0.15);
   }
   if (dist < boss.size / 2 + PLAYER_SIZE / 2) damagePlayer(CONTACT_DPS * 2 * dt, 3);
 }
@@ -471,10 +482,14 @@ function killBoss() {
 }
 
 // ---------- Урон игроку ----------
+function flashHurt(amount) {
+  hurtFlash = Math.min(HURT_FLASH_MAX, hurtFlash + 0.08 + amount * 0.012);
+}
 function damagePlayer(amount, shake) {
   if (hasFx('shield')) return;
   player.hp -= amount;
   hurtFlag = true;
+  flashHurt(amount);
   if (player.sprintCooldown <= 0) {
     player.sprintTimer = SPRINT_DURATION;
     player.sprintCooldown = SPRINT_COOLDOWN;
@@ -522,7 +537,7 @@ function init() {
   wave = 1; spawnTimer = 0;
   waveEnemiesTotal = enemiesPerWave(wave);
   waveEnemiesSpawned = 0; waveBreakTimer = 0;
-  gameOver = false; paused = false; shakeIntensity = 0;
+  gameOver = false; paused = false; shakeIntensity = 0; hurtFlash = 0;
   plane = null; pickups = []; boss = null;
   updateCamera();
   document.getElementById('gameover').style.display = 'none';
@@ -680,6 +695,8 @@ function spawnEnemy(forceType) {
     contactDps: CONTACT_DPS * type.contactDpsMult,
     color: `hsl(${(hueBase + type.hueOffset - wave * 5 + 360) % 360}, 70%, 55%)`,
     hitFlash: 0,
+    jump: null,
+    jumpCd: type.jumper ? 1 + Math.random() * type.jumpCd : 0,
     fireTimer: type.ranged ? Math.random() * type.shootInterval : 0
   });
 }
@@ -692,6 +709,7 @@ function update(dt) {
   score += (SCORE_BASE + (wave - 1) * SCORE_WAVE_GROWTH) * dt;
   shakeIntensity = Math.max(0, shakeIntensity - SHAKE_DECAY * dt);
   hurtFlag = false;
+  hurtFlash = Math.max(0, hurtFlash - dt * 0.7);
   if (toastT > 0 && (toastT -= dt) <= 0) toastEl.style.opacity = 0;
   for (const k in player.fx) player.fx[k] = Math.max(0, player.fx[k] - dt);
 
@@ -767,6 +785,33 @@ function update(dt) {
         e.fireTimer = type.shootInterval;
         sfxEnemyShot();
       }
+    } else if (type.jumper) {
+      if (e.jump) {
+        const j = e.jump;
+        j.t += dt;
+        const p = Math.min(1, j.t / j.dur);
+        e.x = j.sx + (j.tx - j.sx) * p;
+        e.y = j.sy + (j.ty - j.sy) * p;
+        if (p >= 1) { // приземление → мини-волна (чем дальше игрок, тем слабее)
+          shockwaves.push({ x: e.x, y: e.y, r: 0, max: type.waveMax, spd: 300, dmgBase: type.waveDmgBase, dmgVar: type.waveDmgVar, shake: 5, hit: false });
+          triggerShake(5);
+          beep(80, 0.2, 'sawtooth', 0.08);
+          e.jump = null;
+          e.jumpCd = type.jumpCd * (0.8 + Math.random() * 0.4);
+        }
+      } else {
+        if (dist > 70) { e.x += Math.cos(angle) * sp * dt; e.y += Math.sin(angle) * sp * dt; }
+        e.jumpCd -= dt;
+        if (e.jumpCd <= 0 && dist < type.jumpRange) {
+          // прыгает не точно на игрока, а рядом с ним
+          const oa = Math.random() * Math.PI * 2, od = 70 + Math.random() * 40;
+          e.jump = {
+            t: 0, dur: type.jumpDur, sx: e.x, sy: e.y,
+            tx: Math.max(40, Math.min(WORLD_W - 40, player.x + Math.cos(oa) * od)),
+            ty: Math.max(40, Math.min(WORLD_H - 40, player.y + Math.sin(oa) * od))
+          };
+        }
+      }
     } else {
       e.x += Math.cos(angle) * sp * dt;
       e.y += Math.sin(angle) * sp * dt;
@@ -795,11 +840,12 @@ function update(dt) {
 
   // --- звуковые волны босса ---
   shockwaves = shockwaves.filter(s => {
-    s.r += 340 * dt;
+    s.r += (s.spd || 340) * dt;
     const d = Math.hypot(player.x - s.x, player.y - s.y);
     if (!s.hit && s.r >= d && d <= s.max) {
       s.hit = true;
-      damagePlayer(6 + 24 * (1 - d / s.max), 10); // вплотную ~30, на краю ~6
+      // чем дальше игрок от центра, тем меньше урон (у босса вплотную ~30, на краю ~6)
+      damagePlayer(s.dmgBase + s.dmgVar * (1 - d / s.max), s.shake || 10);
     }
     return s.r < s.max;
   });
@@ -842,6 +888,7 @@ function update(dt) {
 
   // --- контакт враг-игрок ---
   for (const e of enemies) {
+    if (e.jump) continue; // в воздухе контактного урона нет
     if (Math.hypot(e.x - player.x, e.y - player.y) < e.size / 2 + PLAYER_SIZE / 2) {
       damagePlayer(e.contactDps * dt, 3);
     }
@@ -986,13 +1033,6 @@ function draw() {
     ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2); ctx.stroke();
   }
 
-  // маркер приземления босса
-  if (boss && boss.jump) {
-    ctx.strokeStyle = 'rgba(255,80,80,0.8)';
-    ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.arc(boss.jump.tx, boss.jump.ty, 30, 0, Math.PI * 2); ctx.stroke();
-  }
-
   for (const p of particles) { ctx.fillStyle = p.color; ctx.fillRect(p.x - 2, p.y - 2, 4, 4); }
 
   ctx.fillStyle = '#ffd93d';
@@ -1036,7 +1076,15 @@ function draw() {
   }
 
   for (const e of enemies) {
-    drawShape(ENEMY_TYPES[e.type].shape, e.x, e.y, e.size, e.hitFlash > 0 ? '#ffffff' : e.color);
+    let lift = 0;
+    if (e.jump) { // прыгающий жирный моб: тень на земле, слабый круг на месте приземления
+      lift = Math.sin(Math.PI * Math.min(1, e.jump.t / e.jump.dur)) * 40;
+      ctx.fillStyle = 'rgba(0,0,0,0.35)';
+      ctx.beginPath(); ctx.ellipse(e.x, e.y, e.size / 2, e.size / 4, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,80,80,0.35)'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(e.jump.tx, e.jump.ty, 26, 0, Math.PI * 2); ctx.stroke();
+    }
+    drawShape(ENEMY_TYPES[e.type].shape, e.x, e.y - lift, e.size, e.hitFlash > 0 ? '#ffffff' : e.color);
   }
 
   // босс (при прыжке — тень на земле + тело, подброшенное вверх)
@@ -1086,6 +1134,28 @@ function draw() {
     ctx.fillStyle = boss.def.color; ctx.fillRect(bx, by, bw * Math.max(0, boss.hp / boss.maxHp), 12);
     ctx.fillStyle = '#fff'; ctx.font = 'bold 12px Courier New'; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
     ctx.fillText(boss.def.name, W / 2, by - 6);
+  }
+
+  // стрелки на краю экрана: откуда стреляют дальнобойные враги, которых не видно
+  for (const e of enemies) {
+    const t = ENEMY_TYPES[e.type];
+    if (!t.ranged || Math.hypot(e.x - player.x, e.y - player.y) > t.shootRange * 1.1) continue;
+    const sx = (e.x - camera.x) * zoom, sy = (e.y - camera.y) * zoom;
+    if (sx >= 0 && sx <= W && sy >= 0 && sy <= H) continue;
+    const cx = W / 2, cy = H / 2, ddx = sx - cx, ddy = sy - cy, m = 24;
+    const k = Math.min((cx - m) / (Math.abs(ddx) || 1e-6), (cy - m) / (Math.abs(ddy) || 1e-6));
+    ctx.save();
+    ctx.translate(cx + ddx * k, cy + ddy * k);
+    ctx.rotate(Math.atan2(ddy, ddx));
+    ctx.fillStyle = 'rgba(255,85,102,0.85)';
+    ctx.beginPath(); ctx.moveTo(12, 0); ctx.lineTo(-8, -8); ctx.lineTo(-8, 8); ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+
+  // красная вспышка при получении урона
+  if (hurtFlash > 0.005) {
+    ctx.fillStyle = 'rgba(255,0,0,' + hurtFlash.toFixed(3) + ')';
+    ctx.fillRect(0, 0, W, H);
   }
 
   // джойстик
