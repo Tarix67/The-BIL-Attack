@@ -144,10 +144,15 @@ const AUTO_RANGE = 380;  // дальность, на которой игрок �
 let lastTime = 0;
 
 // ---------- Спрайт аптечки ----------
-// Положите medkit.png рядом с index.html. Пока файла нет или он не загрузился,
+// Файл лежит рядом с index.html. Пока файла нет или он не загрузился,
 // рисуется зелёный квадрат с плюсом, поэтому игра не сломается.
-const MEDKIT_SPRITE = 'medkit.png';
-const MEDKIT_DRAW_SIZE = 34; // ширина аптечки в игровых единицах (игрок = 22)
+// Это лист кадров: MEDKIT_COLS x MEDKIT_ROWS кадров, проигрываются по порядку слева направо, сверху вниз.
+// Для одной статичной картинки поставьте MEDKIT_COLS = 1 и MEDKIT_ROWS = 1.
+const MEDKIT_SPRITE = 'medkit_png.png';
+const MEDKIT_COLS = 3;
+const MEDKIT_ROWS = 4;
+const MEDKIT_FPS = 6;        // кадров в секунду
+const MEDKIT_DRAW_SIZE = 40; // размер одного кадра в игровых единицах (игрок = 22)
 const medkitImg = new Image();
 let medkitReady = false;
 medkitImg.onload = () => { medkitReady = true; };
@@ -1013,8 +1018,10 @@ function draw() {
     ctx.translate(p.x, p.y + bob);
     if (p.known && medkitReady) {
       ctx.imageSmoothingEnabled = false; // чтобы пиксель-арт не размывался
-      const w = MEDKIT_DRAW_SIZE, h = MEDKIT_DRAW_SIZE * medkitImg.naturalHeight / medkitImg.naturalWidth;
-      ctx.drawImage(medkitImg, -w / 2, -h / 2, w, h);
+      const fw = medkitImg.naturalWidth / MEDKIT_COLS, fh = medkitImg.naturalHeight / MEDKIT_ROWS;
+      const f = Math.floor(performance.now() / 1000 * MEDKIT_FPS) % (MEDKIT_COLS * MEDKIT_ROWS);
+      const w = MEDKIT_DRAW_SIZE, h = MEDKIT_DRAW_SIZE * fh / fw;
+      ctx.drawImage(medkitImg, (f % MEDKIT_COLS) * fw, Math.floor(f / MEDKIT_COLS) * fh, fw, fh, -w / 2, -h / 2, w, h);
       ctx.restore();
       continue;
     }
