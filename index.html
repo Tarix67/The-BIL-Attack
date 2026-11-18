@@ -405,7 +405,7 @@ function bossAttack() {
   } else if (a === 'jump') {
     // прыжок в ПРЕДСКАЗАННУЮ точку: куда игрок придёт, если продолжит бежать так же.
     // k и jx/jy — небольшая неточность, чтобы прыжок был "примерно" туда
-    boss.jump = { t: 0, dur: 1.0, sx: boss.x, sy: boss.y, tx: boss.x, ty: boss.y,
+    boss.jump = { t: 0, dur: 1.2, sx: boss.x, sy: boss.y, tx: boss.x, ty: boss.y,
                   k: 0.8 + Math.random() * 0.25, jx: (Math.random() - 0.5) * 80, jy: (Math.random() - 0.5) * 80 };
   }
   return a;
