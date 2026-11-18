@@ -431,14 +431,20 @@ function explodeBomb(b, out) {
 function updateBoss(dt) {
   boss.hitFlash = Math.max(0, boss.hitFlash - dt);
   if (boss.jump) {
-    const j = boss.jump;
+        const j = boss.jump;
+    const WINDUP = 0.4; // сколько босс "прицеливается" на земле
     j.t += dt;
-    const p = Math.min(1, j.t / j.dur);
-    if (p < 0.4) { // первые 40% полёта уточняет прогноз, потом цель фиксируется (0.6 с на то, чтобы свернуть)
-      const remain = Math.max(0, j.dur - j.t);
+    if (j.t < WINDUP) {
+      // на земле: цель ещё уточняется, но босс стоит на месте
+      const remain = j.dur - j.t;
       j.tx = Math.max(60, Math.min(WORLD_W - 60, player.x + player.vx * remain * j.k + j.jx));
       j.ty = Math.max(60, Math.min(WORLD_H - 60, player.y + player.vy * remain * j.k + j.jy));
+      j.p = 0;
+      return;
     }
+    // в воздухе: цель зафиксирована, летит строго по прямой
+    const p = Math.min(1, (j.t - WINDUP) / (j.dur - WINDUP));
+    j.p = p;
     boss.x = j.sx + (j.tx - j.sx) * p;
     boss.y = j.sy + (j.ty - j.sy) * p;
     if (p >= 1) {
