@@ -160,6 +160,22 @@ let medkitReady = false;
 medkitImg.onload = () => { medkitReady = true; };
 medkitImg.src = MEDKIT_SPRITE;
 
+// ---------- Карта (картинка мира) ----------
+// Файл лежит рядом с index.html. Если файла нет или он не загрузился, рисуется тёмный фон с сеткой.
+// Мир берёт размер из картинки. Картинка растягивается в ЦЕЛОЕ число раз (чтобы пиксели не плыли):
+// MAP_SCALE = null — подобрать автоматически, чтобы мир был не меньше минимального размера (см. computeWorldSize);
+// MAP_SCALE = 2 (или 3, 4...) — задать вручную.
+const MAP_SPRITE = 'map.png';
+const MAP_SCALE = null;
+const mapImg = new Image();
+let mapState = 'loading'; // 'loading' | 'ready' | 'none'
+let mapScale = 1;
+mapImg.onload = () => { mapState = 'ready'; if (!started) init(); }; // до старта игры просто пересоздаём мир с новым размером
+mapImg.onerror = () => { mapState = 'none'; };
+mapImg.src = MAP_SPRITE;
+
+
+
 // ---------- Лидерборд (Supabase) ----------
 const SUPABASE_URL = 'https://wydvpmrmsmhjwtwaafxe.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_v73ueWUwtzxivjLLONlTlA_iKlWfPhy';
@@ -211,6 +227,11 @@ function startGame() {
     document.getElementById('nameError').textContent = 'Введите имя (минимум 2 символа)';
     return;
   }
+  if (mapState === 'loading') {
+    document.getElementById('nameError').textContent = 'Загружается карта, нажмите ещё раз через секунду...';
+    return;
+  }
+  document.getElementById('nameError').textContent = '';
   playerName = name;
   try { localStorage.setItem('playerName', name); } catch (e) {}
   started = true;
@@ -530,11 +551,28 @@ function resizeCanvas() {
 window.addEventListener('resize', resizeCanvas);
 window.addEventListener('orientationchange', resizeCanvas);
 
+// Размер мира: по картинке карты (если есть), иначе стандартный. Минимум — чтобы мир был заметно больше экрана.
+function computeWorldSize() {
+  const minW = Math.max(2400, Math.round(VW * 1.8)), minH = Math.max(1800, Math.round(VH * 1.8));
+  if (mapState === 'ready') {
+    const nw = mapImg.naturalWidth, nh = mapImg.naturalHeight;
+    // для картинки достаточно, чтобы мир был не меньше 2400x1800 и чуть больше экрана
+    const needW = Math.max(2400, Math.round(VW * 1.2)), needH = Math.max(1800, Math.round(VH * 1.2));
+    mapScale = MAP_SCALE || Math.max(1, Math.ceil(Math.max(needW / nw, needH / nh)));
+    mapScale = Math.max(mapScale, Math.ceil(Math.max(VW / nw, VH / nh))); // мир никогда не меньше экрана
+    WORLD_W = nw * mapScale;
+    WORLD_H = nh * mapScale;
+  } else {
+    mapScale = 1;
+    WORLD_W = minW;
+    WORLD_H = minH;
+  }
+}
+
 function init() {
   resizeCanvas();
   switchTheme(currentTheme);
-  WORLD_W = Math.max(2400, Math.round(VW * 1.8));
-  WORLD_H = Math.max(1800, Math.round(VH * 1.8));
+  computeWorldSize();
   player = { x: WORLD_W / 2, y: WORLD_H / 2, vx: 0, vy: 0, hp: 100, maxHp: 100, fireCooldown: 0, sprintTimer: 0, sprintCooldown: 0, guns: 1, fx: {} };
   bullets = []; enemyBullets = []; enemies = []; particles = []; shockwaves = [];
   score = 0; runTime = 0; scoreSubmitted = false;
@@ -1017,20 +1055,27 @@ function draw() {
   ctx.scale(zoom, zoom);
   ctx.translate(-camera.x + shakeX, -camera.y + shakeY);
 
-  ctx.strokeStyle = THEMES[currentTheme].gridColor;
-  ctx.lineWidth = 1;
-  const gridStartX = Math.floor(camera.x / 40) * 40;
-  const gridStartY = Math.floor(camera.y / 40) * 40;
-  for (let x = gridStartX; x < camera.x + VW; x += 40) {
-    ctx.beginPath(); ctx.moveTo(x, camera.y); ctx.lineTo(x, camera.y + VH); ctx.stroke();
+  if (mapState === 'ready') {
+    // рисуем только ту часть карты, которую видит камера (так быстрее на телефоне)
+    const eff = zoom * mapScale; // сколько экранных пикселей на один пиксель картинки
+    ctx.imageSmoothingEnabled = Math.abs(eff - Math.round(eff)) > 0.02; // чёткие пиксели, если масштаб целый
+    ctx.drawImage(mapImg, camera.x / mapScale, camera.y / mapScale, VW / mapScale, VH / mapScale, camera.x, camera.y, VW, VH);
+  } else {
+    ctx.strokeStyle = THEMES[currentTheme].gridColor;
+    ctx.lineWidth = 1;
+    const gridStartX = Math.floor(camera.x / 40) * 40;
+    const gridStartY = Math.floor(camera.y / 40) * 40;
+    for (let x = gridStartX; x < camera.x + VW; x += 40) {
+      ctx.beginPath(); ctx.moveTo(x, camera.y); ctx.lineTo(x, camera.y + VH); ctx.stroke();
+    }
+    for (let y = gridStartY; y < camera.y + VH; y += 40) {
+      ctx.beginPath(); ctx.moveTo(camera.x, y); ctx.lineTo(camera.x + VW, y); ctx.stroke();
+    }
+    // красная рамка по краю мира — только пока нет картинки карты
+    ctx.strokeStyle = THEMES[currentTheme].wallColor;
+    ctx.lineWidth = WALL_THICKNESS;
+    ctx.strokeRect(WALL_THICKNESS / 2, WALL_THICKNESS / 2, WORLD_W - WALL_THICKNESS, WORLD_H - WALL_THICKNESS);
   }
-  for (let y = gridStartY; y < camera.y + VH; y += 40) {
-    ctx.beginPath(); ctx.moveTo(camera.x, y); ctx.lineTo(camera.x + VW, y); ctx.stroke();
-  }
-
-  ctx.strokeStyle = THEMES[currentTheme].wallColor;
-  ctx.lineWidth = WALL_THICKNESS;
-  ctx.strokeRect(WALL_THICKNESS / 2, WALL_THICKNESS / 2, WORLD_W - WALL_THICKNESS, WORLD_H - WALL_THICKNESS);
 
   // звуковые волны
   for (const s of shockwaves) {
