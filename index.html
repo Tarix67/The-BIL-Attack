@@ -212,11 +212,11 @@ function blockedAt(x, y, r) {
 // o уже сдвинут на шаг; (ox, oy) — позиция до шага. Если упёрлись в стену, скользим вдоль неё.
 function resolveMove(o, ox, oy, r) {
   if (!blockedAt(o.x, o.y, r)) return;
-  if (blockedAt(ox, oy, r)) return; // уже внутри стены — не мешаем выбраться
   const nx = o.x, ny = o.y;
-  if (!blockedAt(nx, oy, r)) o.y = oy;
-  else if (!blockedAt(ox, ny, r)) o.x = ox;
+  if (!blockedAt(nx, oy, r)) { o.x = nx; o.y = oy; }        // скользим вдоль стены по X
+  else if (!blockedAt(ox, ny, r)) { o.x = ox; o.y = ny; }   // скользим вдоль стены по Y
   else { o.x = ox; o.y = oy; }
+  if (blockedAt(o.x, o.y, r)) Object.assign(o, findFreeNear(o.x, o.y, r));
 }
 // ближайшая свободная точка (для спавна, приземлений и ящиков)
 function findFreeNear(x, y, r) {
@@ -228,7 +228,112 @@ function findFreeNear(x, y, r) {
     }
   return { x, y };
 }
+// ---------- Поиск пути: карта расстояний до игрока ----------
+const NAV_CELL = 32; // размер клетки. Проходы уже ~2 клеток для монстров считаются закрытыми
+const NDX = [1, -1, 0, 0, 1, 1, -1, -1], NDY = [0, 0, 1, -1, 1, -1, 1, -1];
+let navCols = 0, navRows = 0, navBlocked = null, navDist = null, navQueue = null;
+let flowTimer = 0, flowCell = -1;
 
+function buildNav() {
+  navCols = Math.ceil(WORLD_W / NAV_CELL); navRows = Math.ceil(WORLD_H / NAV_CELL);
+  navBlocked = new Uint8Array(navCols * navRows);
+  navDist = new Int32Array(navCols * navRows).fill(-1);
+  navQueue = new Int32Array(navCols * navRows);
+  const o = NAV_CELL * 0.4;
+  for (let cy = 0; cy < navRows; cy++) for (let cx = 0; cx < navCols; cx++) {
+    const x = (cx + 0.5) * NAV_CELL, y = (cy + 0.5) * NAV_CELL;
+    let b = false;
+    for (let i = -1; i <= 1 && !b; i++) for (let j = -1; j <= 1; j++)
+      if (isBlocked(x + i * o, y + j * o)) { b = true; break; }
+    if (b) navBlocked[cy * navCols + cx] = 1;
+  }
+  flowCell = -1; flowTimer = 0;
+}
+
+function updateFlow(dt) {
+  if (!navDist) return;
+  let sx = Math.max(0, Math.min(navCols - 1, Math.floor(player.x / NAV_CELL)));
+  let sy = Math.max(0, Math.min(navRows - 1, Math.floor(player.y / NAV_CELL)));
+  const pc = sy * navCols + sx;
+  flowTimer -= dt;
+  if (flowTimer > 0 && pc === flowCell) return;
+  flowTimer = 0.25; flowCell = pc;
+  if (navBlocked[pc]) { // клетка игрока у самой стены — берём ближайшую свободную
+    let found = false;
+    for (let r = 1; r <= 4 && !found; r++)
+      for (let dy = -r; dy <= r && !found; dy++) for (let dx = -r; dx <= r; dx++) {
+        const x = sx + dx, y = sy + dy;
+        if (x < 0 || y < 0 || x >= navCols || y >= navRows) continue;
+        if (!navBlocked[y * navCols + x]) { sx = x; sy = y; found = true; break; }
+      }
+  }
+  navDist.fill(-1);
+  let head = 0, tail = 0;
+  navDist[sy * navCols + sx] = 0; navQueue[tail++] = sy * navCols + sx;
+  while (head < tail) {
+    const c = navQueue[head++], cx = c % navCols, cy = (c / navCols) | 0, d = navDist[c] + 1;
+    for (let k = 0; k < 8; k++) {
+      const nx = cx + NDX[k], ny = cy + NDY[k];
+      if (nx < 0 || ny < 0 || nx >= navCols || ny >= navRows) continue;
+      const n = ny * navCols + nx;
+      if (navBlocked[n] || navDist[n] !== -1) continue;
+      if (k >= 4 && (navBlocked[cy * navCols + nx] || navBlocked[ny * navCols + cx])) continue; // не режем углы
+      navDist[n] = d; navQueue[tail++] = n;
+    }
+  }
+}
+
+function flowDistAt(x, y) {
+  if (!navDist) return 0;
+  const cx = Math.max(0, Math.min(navCols - 1, Math.floor(x / NAV_CELL)));
+  const cy = Math.max(0, Math.min(navRows - 1, Math.floor(y / NAV_CELL)));
+  return navDist[cy * navCols + cx];
+}
+
+function hasLineOfSight(x1, y1, x2, y2) {
+  const dx = x2 - x1, dy = y2 - y1, n = Math.ceil(Math.hypot(dx, dy) / 16);
+  for (let i = 1; i < n; i++) if (blockedAt(x1 + dx * i / n, y1 + dy * i / n, 10)) return false;
+  return true;
+}
+
+// угол движения: напрямую, если игрока видно, иначе к соседней клетке, которая ближе к нему
+function steerAngle(o, direct) {
+  if (!navDist || hasLineOfSight(o.x, o.y, player.x, player.y)) return direct;
+  const cx = Math.max(0, Math.min(navCols - 1, Math.floor(o.x / NAV_CELL)));
+  const cy = Math.max(0, Math.min(navRows - 1, Math.floor(o.y / NAV_CELL)));
+  let best = navDist[cy * navCols + cx];
+  if (best < 0) best = Infinity;
+  let bx = -1, by = -1;
+  for (let k = 0; k < 8; k++) {
+    const nx = cx + NDX[k], ny = cy + NDY[k];
+    if (nx < 0 || ny < 0 || nx >= navCols || ny >= navRows) continue;
+    const d = navDist[ny * navCols + nx];
+    if (d < 0 || d >= best) continue;
+    if (k >= 4 && (navBlocked[cy * navCols + nx] || navBlocked[ny * navCols + cx])) continue;
+    best = d; bx = nx; by = ny;
+  }
+  if (bx < 0) return direct;
+  return Math.atan2((by + 0.5) * NAV_CELL - o.y, (bx + 0.5) * NAV_CELL - o.x);
+}
+
+// точка спавна у края мира: не в стене и достижимая для игрока
+function pickSpawnPoint() {
+  const m = 40;
+  for (let t = 0; t < 60; t++) {
+    const side = Math.floor(Math.random() * 4);
+    let x, y;
+    if (side === 0) { x = m; y = m + Math.random() * (WORLD_H - m * 2); }
+    else if (side === 1) { x = WORLD_W - m; y = m + Math.random() * (WORLD_H - m * 2); }
+    else if (side === 2) { x = m + Math.random() * (WORLD_W - m * 2); y = m; }
+    else { x = m + Math.random() * (WORLD_W - m * 2); y = WORLD_H - m; }
+    if (!blockedAt(x, y, 14) && flowDistAt(x, y) !== -1) return { x, y };
+  }
+  for (let t = 0; t < 200; t++) { // запасной вариант: любое достижимое место подальше от игрока
+    const x = 40 + Math.random() * (WORLD_W - 80), y = 40 + Math.random() * (WORLD_H - 80);
+    if (!blockedAt(x, y, 14) && flowDistAt(x, y) > 0 && Math.hypot(x - player.x, y - player.y) > 400) return { x, y };
+  }
+  return findFreeNear(40, 40, 14);
+}
 
 // ---------- Лидерборд (Supabase) ----------
 const SUPABASE_URL = 'https://wydvpmrmsmhjwtwaafxe.supabase.co';
@@ -505,7 +610,7 @@ function explodeBomb(b, out) {
 function updateBoss(dt) {
   boss.hitFlash = Math.max(0, boss.hitFlash - dt);
   if (boss.jump) {
-        const j = boss.jump;
+    const j = boss.jump;
     const WINDUP = 0.4; // сколько босс "прицеливается" на земле
     j.t += dt;
     if (j.t < WINDUP) {
@@ -537,8 +642,9 @@ function updateBoss(dt) {
   const dist = Math.hypot(player.x - boss.x, player.y - boss.y);
   if (dist > 200) {
     const ox = boss.x, oy = boss.y;
-    boss.x += Math.cos(ang) * boss.speed * dt;
-    boss.y += Math.sin(ang) * boss.speed * dt;
+    const mAng = steerAngle(boss, ang);
+    boss.x += Math.cos(mAng) * boss.speed * dt;
+    boss.y += Math.sin(mAng) * boss.speed * dt;
     resolveMove(boss, ox, oy, 24);
   }
   boss.atk -= dt;
@@ -629,6 +735,7 @@ function init() {
   resizeCanvas();
   switchTheme(currentTheme);
   computeWorldSize();
+  buildNav()
   player = { x: WORLD_W / 2, y: WORLD_H / 2, vx: 0, vy: 0, hp: 100, maxHp: 100, fireCooldown: 0, sprintTimer: 0, sprintCooldown: 0, guns: 1, fx: {} };
   Object.assign(player, findFreeNear(player.x, player.y, 12));
   bullets = []; enemyBullets = []; enemies = []; particles = []; shockwaves = [];
@@ -776,17 +883,7 @@ function spawnPlane() {
 
 // ---------- Спавн врагов ----------
 function spawnEnemy(forceType) {
-  const side = Math.floor(Math.random() * 4);
-  let x, y;
-  const margin = 40;
-  if (side === 0) { x = margin; y = margin + Math.random() * (WORLD_H - margin * 2); }
-  else if (side === 1) { x = WORLD_W - margin; y = margin + Math.random() * (WORLD_H - margin * 2); }
-  else if (side === 2) { x = margin + Math.random() * (WORLD_W - margin * 2); y = margin; }
-  else { x = margin + Math.random() * (WORLD_W - margin * 2); y = WORLD_H - margin; }
-
-  ({ x, y } = findFreeNear(x, y, 12));
-  const typeKey = forceType || pickEnemyType();
-  const type = ENEMY_TYPES[typeKey];
+  const { x, y } = pickSpawnPoint();  const type = ENEMY_TYPES[typeKey];
   const hueBase = THEMES[currentTheme].enemyHueBase;
   const speedFrac = Math.min(type.speedCap, type.speedFrac + (wave - 1) * ENEMY_SPEED_GROWTH);
   enemies.push({
@@ -872,17 +969,19 @@ function update(dt) {
     return b.x > -10 && b.x < WORLD_W + 10 && b.y > -10 && b.y < WORLD_H + 10;
   });
 
-  // --- враги ---
+    // --- враги ---
+  updateFlow(dt);
   const rage = hasFx('rage') ? 1.4 : 1;
   for (const e of enemies) {
     const type = ENEMY_TYPES[e.type];
     const ox = e.x, oy = e.y;
     e.hitFlash = Math.max(0, e.hitFlash - dt);
-    const angle = Math.atan2(player.y - e.y, player.x - e.x);
+    const angle = Math.atan2(player.y - e.y, player.x - e.x); // прямой угол: для стрельбы
     const dist = Math.hypot(player.x - e.x, player.y - e.y);
     const sp = e.speed * rage;
+    const mAngle = e.jump ? angle : steerAngle(e, angle);     // угол движения: в обход стен
     if (type.ranged) {
-      if (dist > type.shootRange * 0.85) { e.x += Math.cos(angle) * sp * dt; e.y += Math.sin(angle) * sp * dt; }
+      if (dist > type.shootRange * 0.85) { e.x += Math.cos(mAngle) * sp * dt; e.y += Math.sin(mAngle) * sp * dt; }
       else if (dist < type.shootRange * 0.5) { e.x -= Math.cos(angle) * sp * dt; e.y -= Math.sin(angle) * sp * dt; }
       e.fireTimer -= dt;
       if (e.fireTimer <= 0 && dist < type.shootRange) {
@@ -904,15 +1003,14 @@ function update(dt) {
           shockwaves.push({ x: e.x, y: e.y, r: 0, max: type.waveMax, spd: 300, dmgBase: type.waveDmgBase, dmgVar: type.waveDmgVar, shake: 5, hit: false });
           triggerShake(5);
           beep(80, 0.2, 'sawtooth', 0.08);
-          e.jump = null;
           Object.assign(e, findFreeNear(e.x, e.y, e.size * 0.4));
+          e.jump = null;
           e.jumpCd = type.jumpCd * (0.8 + Math.random() * 0.4);
         }
       } else {
-        if (dist > 70) { e.x += Math.cos(angle) * sp * dt; e.y += Math.sin(angle) * sp * dt; }
+        if (dist > 70) { e.x += Math.cos(mAngle) * sp * dt; e.y += Math.sin(mAngle) * sp * dt; }
         e.jumpCd -= dt;
         if (e.jumpCd <= 0 && dist < type.jumpRange) {
-          // прыгает не точно на игрока, а рядом с ним
           const oa = Math.random() * Math.PI * 2, od = 70 + Math.random() * 40;
           e.jump = {
             t: 0, dur: type.jumpDur, sx: e.x, sy: e.y,
@@ -922,8 +1020,8 @@ function update(dt) {
         }
       }
     } else {
-      e.x += Math.cos(angle) * sp * dt;
-      e.y += Math.sin(angle) * sp * dt;
+      e.x += Math.cos(mAngle) * sp * dt;
+      e.y += Math.sin(mAngle) * sp * dt;
     }
     if (!e.jump) resolveMove(e, ox, oy, e.size * 0.4);
   }
