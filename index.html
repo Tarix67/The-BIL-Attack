@@ -883,7 +883,9 @@ function spawnPlane() {
 
 // ---------- Спавн врагов ----------
 function spawnEnemy(forceType) {
-  const { x, y } = pickSpawnPoint();  const type = ENEMY_TYPES[typeKey];
+  const { x, y } = pickSpawnPoint();
+  const typeKey = forceType || pickEnemyType();
+  const type = ENEMY_TYPES[typeKey];
   const hueBase = THEMES[currentTheme].enemyHueBase;
   const speedFrac = Math.min(type.speedCap, type.speedFrac + (wave - 1) * ENEMY_SPEED_GROWTH);
   enemies.push({
