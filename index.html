@@ -437,6 +437,7 @@ function spawnBoss() {
     x: player.x < WORLD_W / 2 ? WORLD_W - 200 : 200,
     y: player.y < WORLD_H / 2 ? WORLD_H - 200 : 200
   };
+  Object.assign(boss, findFreeNear(boss.x, boss.y, 30));
   showToast('БОСС: ' + def.name + '!', false);
   sfxBoom();
 }
@@ -478,8 +479,6 @@ function bossAttack() {
     }
     sfxEnemyShot();
   } else if (a === 'jump') {
-    // прыжок в ПРЕДСКАЗАННУЮ точку: куда игрок придёт, если продолжит бежать так же.
-    // k и jx/jy — небольшая неточность, чтобы прыжок был "примерно" туда
     boss.jump = { t: 0, dur: 1.1, sx: boss.x, sy: boss.y, tx: boss.x, ty: boss.y,
                   k: 0.8 + Math.random() * 0.25, jx: (Math.random() - 0.5) * 80, jy: (Math.random() - 0.5) * 80 };
   }
@@ -528,6 +527,7 @@ function updateBoss(dt) {
       if (Math.hypot(player.x - boss.x, player.y - boss.y) < 60) damagePlayer(25, 12);
       triggerShake(14);
       sfxBoom();
+      Object.assign(boss, findFreeNear(boss.x, boss.y, 28));
       boss.jump = null;
       boss.atk = 1.6;
     }
@@ -630,6 +630,7 @@ function init() {
   switchTheme(currentTheme);
   computeWorldSize();
   player = { x: WORLD_W / 2, y: WORLD_H / 2, vx: 0, vy: 0, hp: 100, maxHp: 100, fireCooldown: 0, sprintTimer: 0, sprintCooldown: 0, guns: 1, fx: {} };
+  Object.assign(player, findFreeNear(player.x, player.y, 12));
   bullets = []; enemyBullets = []; enemies = []; particles = []; shockwaves = [];
   score = 0; runTime = 0; scoreSubmitted = false;
   document.getElementById('submitStatus').textContent = '';
@@ -783,6 +784,7 @@ function spawnEnemy(forceType) {
   else if (side === 2) { x = margin + Math.random() * (WORLD_W - margin * 2); y = margin; }
   else { x = margin + Math.random() * (WORLD_W - margin * 2); y = WORLD_H - margin; }
 
+  ({ x, y } = findFreeNear(x, y, 12));
   const typeKey = forceType || pickEnemyType();
   const type = ENEMY_TYPES[typeKey];
   const hueBase = THEMES[currentTheme].enemyHueBase;
@@ -1053,7 +1055,8 @@ function update(dt) {
     plane.y = plane.startY + (plane.endY - plane.startY) * progress;
     if (!plane.dropped && progress >= plane.dropProgress) {
       plane.dropped = true;
-      pickups.push(makeMedkit(plane.dropX, plane.dropY));
+      const f = findFreeNear(plane.dropX, plane.dropY, 14);
+      pickups.push(makeMedkit(f.x, f.y));
     }
     if (progress >= 1) plane = null;
   }
@@ -1120,7 +1123,13 @@ function draw() {
   ctx.translate(-camera.x + shakeX, -camera.y + shakeY);
 
   if (mapState === 'ready') {
-    // рисуем только ту часть карты, которую видит камера (так быстрее на телефоне)
+    if (DEBUG_BLOCKS && mapState === 'ready') {
+      ctx.globalAlpha = 0.4;
+      if (maskState === 'ready') ctx.drawImage(maskImg, 0, 0, WORLD_W, WORLD_H);
+      ctx.fillStyle = '#f00';
+      for (const [rx, ry, rw, rh] of BLOCK_RECTS) ctx.fillRect(rx * mapScale, ry * mapScale, rw * mapScale, rh * mapScale);
+      ctx.globalAlpha = 1;
+  }
     const eff = zoom * mapScale; // сколько экранных пикселей на один пиксель картинки
     ctx.imageSmoothingEnabled = Math.abs(eff - Math.round(eff)) > 0.02; // чёткие пиксели, если масштаб целый
     ctx.drawImage(mapImg, camera.x / mapScale, camera.y / mapScale, VW / mapScale, VH / mapScale, camera.x, camera.y, VW, VH);
