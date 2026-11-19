@@ -34,8 +34,7 @@
 <div id="ui">
   <span>HP: <span id="hp">100</span></span>
   <span>Счёт: <span id="score">0</span></span>
-  <span>Волна: <span id="wave">1</span> (<span id="remaining">0</span>)</span>
-</div>
+  <span>Волна: <span id="wave">1</span> (<span id="remaining">0</span>) <span id="wtimer">45</span>с</span></div>
 <div id="fx"></div>
 <div id="toast"></div>
 
@@ -137,6 +136,25 @@ const SPRINT_MULT = 1.7;
 const SPRINT_COOLDOWN = 4;
 const HURT_FLASH_MAX = 0.3; // максимальная прозрачность красной вспышки (0.3 = "немного")
 const BOSS_EVERY = 5;
+const WAVE_TIME = 45;       // секунд на обычную волну
+const BOSS_WAVE_TIME = 75;  // секунд на волну с боссом
+const MAX_ENEMIES = 80;     // предел монстров на карте, чтобы игра не тормозила
+let waveTimer = WAVE_TIME;
+
+function waveTimeFor(w) { return w % BOSS_EVERY === 0 ? BOSS_WAVE_TIME : WAVE_TIME; }
+
+function nextWave(forced) {
+  wave++;
+  const isBossWave = wave % BOSS_EVERY === 0;
+  waveEnemiesTotal = isBossWave ? Math.min(16, 6 + (wave / BOSS_EVERY) * 2) : enemiesPerWave(wave);
+  waveEnemiesSpawned = 0;
+  spawnTimer = 0;
+  waveBreakTimer = WAVE_BREAK;
+  waveTimer = waveTimeFor(wave);
+  if (forced) showToast('Время вышло! Волна ' + wave, false);
+  if (isBossWave && !boss) spawnBoss(); // если прошлый босс ещё жив, второго не создаём
+  if (!plane && wave % PLANE_WAVE_INTERVAL === 0) spawnPlane();
+}
 const MAX_GUNS = 4;
 const ENEMY_DROP_CHANCE = 0.05;
 const VIEW_TARGET = 600; // сколько мировых единиц должно помещаться по МЕНЬШЕЙ стороне экрана
@@ -743,6 +761,7 @@ function init() {
   document.getElementById('submitStatus').textContent = '';
   document.getElementById('retrySubmitBtn').style.display = 'none';
   wave = 1; spawnTimer = 0;
+  waveTimer = waveTimeFor(1);
   waveEnemiesTotal = enemiesPerWave(wave);
   waveEnemiesSpawned = 0; waveBreakTimer = 0;
   gameOver = false; paused = false; shakeIntensity = 0; hurtFlash = 0;
@@ -1126,25 +1145,23 @@ function update(dt) {
   });
 
   // --- волны: босс каждые BOSS_EVERY волн, следующая волна — только после его смерти ---
+    // --- волны: следующая начинается, когда текущая зачищена ИЛИ вышел таймер ---
+  if (waveBreakTimer <= 0) {
+    waveTimer -= dt;
+    if (waveTimer <= 0) nextWave(true);
+  }
   if (waveBreakTimer > 0) {
     waveBreakTimer -= dt;
   } else if (waveEnemiesSpawned < waveEnemiesTotal) {
     spawnTimer += dt;
     const spawnInterval = Math.max(0.25, 1 - wave * 0.05);
-    if (spawnTimer > spawnInterval) {
+    if (spawnTimer > spawnInterval && enemies.length < MAX_ENEMIES) {
       spawnEnemy(wave % BOSS_EVERY === 0 ? (Math.random() < 0.7 ? 'chaser' : 'runner') : undefined);
       waveEnemiesSpawned++;
       spawnTimer = 0;
     }
   } else if (enemies.length === 0 && !boss) {
-    wave++;
-    const isBossWave = wave % BOSS_EVERY === 0;
-    waveEnemiesTotal = isBossWave ? Math.min(16, 6 + (wave / BOSS_EVERY) * 2) : enemiesPerWave(wave);
-    waveEnemiesSpawned = 0;
-    spawnTimer = 0;
-    waveBreakTimer = WAVE_BREAK;
-    if (isBossWave) spawnBoss();
-    if (!plane && wave % PLANE_WAVE_INTERVAL === 0) spawnPlane();
+    nextWave(false);
   }
 
   // --- самолёт: всегда сбрасывает аптечку ---
@@ -1176,6 +1193,9 @@ function update(dt) {
   document.getElementById('hp').textContent = Math.max(0, Math.ceil(player.hp));
   document.getElementById('score').textContent = Math.floor(score);
   document.getElementById('wave').textContent = wave;
+  const wt = document.getElementById('wtimer');
+  wt.textContent = Math.max(0, Math.ceil(waveTimer));
+  wt.style.color = waveTimer < 10 ? '#ff6b81' : '';
   document.getElementById('remaining').textContent = boss ? 'БОСС' : (waveEnemiesTotal - waveEnemiesSpawned) + enemies.length;
   let fxHtml = '';
   for (const d of GOOD.concat(BAD)) {
