@@ -170,10 +170,64 @@ const MAP_SCALE = null;
 const mapImg = new Image();
 let mapState = 'loading'; // 'loading' | 'ready' | 'none'
 let mapScale = 1;
-mapImg.onload = () => { mapState = 'ready'; if (!started) init(); }; // до старта игры просто пересоздаём мир с новым размером
-mapImg.onerror = () => { mapState = 'none'; };
+mapImg.onload = () => { mapState = 'ready'; tryBuildGrid(); if (!started) init(); };mapImg.onerror = () => { mapState = 'none'; };
 mapImg.src = MAP_SPRITE;
+const MASK_SPRITE = 'map_mask.png';
+const BLOCK_RECTS = [];
+const DEBUG_BLOCKS = false; // true — подсветить непроходимые зоны красным, чтобы проверить маску
+const maskImg = new Image();
+let maskState = 'loading'; // 'loading' | 'ready' | 'none'
+let blockGrid = null, gridW = 0, gridH = 0;
+maskImg.onload = () => { maskState = 'ready'; tryBuildGrid(); if (!started && mapState === 'ready') init(); };
+maskImg.onerror = () => { maskState = 'none'; tryBuildGrid(); if (!started && mapState === 'ready') init(); };
+maskImg.src = MASK_SPRITE;
 
+function tryBuildGrid() {
+  if (mapState !== 'ready' || maskState === 'loading') return;
+  gridW = mapImg.naturalWidth; gridH = mapImg.naturalHeight;
+  blockGrid = new Uint8Array(gridW * gridH);
+  if (maskState === 'ready') {
+    try {
+      const c = document.createElement('canvas'); c.width = gridW; c.height = gridH;
+      const cx = c.getContext('2d', { willReadFrequently: true });
+      cx.drawImage(maskImg, 0, 0, gridW, gridH);
+      const d = cx.getImageData(0, 0, gridW, gridH).data;
+      for (let i = 0; i < blockGrid.length; i++) if (d[i * 4 + 3] > 128) blockGrid[i] = 1;
+    } catch (e) { console.warn('Маска не прочиталась (открыт file://? нужен сервер):', e); }
+  }
+  for (const [rx, ry, rw, rh] of BLOCK_RECTS)
+    for (let y = Math.max(0, ry); y < Math.min(gridH, ry + rh); y++)
+      for (let x = Math.max(0, rx); x < Math.min(gridW, rx + rw); x++) blockGrid[y * gridW + x] = 1;
+}
+
+function isBlocked(x, y) {
+  if (!blockGrid) return false;
+  const mx = Math.floor(x / mapScale), my = Math.floor(y / mapScale);
+  if (mx < 0 || my < 0 || mx >= gridW || my >= gridH) return false;
+  return blockGrid[my * gridW + mx] === 1;
+}
+function blockedAt(x, y, r) {
+  return isBlocked(x, y) || isBlocked(x + r, y) || isBlocked(x - r, y) || isBlocked(x, y + r) || isBlocked(x, y - r);
+}
+// o уже сдвинут на шаг; (ox, oy) — позиция до шага. Если упёрлись в стену, скользим вдоль неё.
+function resolveMove(o, ox, oy, r) {
+  if (!blockedAt(o.x, o.y, r)) return;
+  if (blockedAt(ox, oy, r)) return; // уже внутри стены — не мешаем выбраться
+  const nx = o.x, ny = o.y;
+  if (!blockedAt(nx, oy, r)) o.y = oy;
+  else if (!blockedAt(ox, ny, r)) o.x = ox;
+  else { o.x = ox; o.y = oy; }
+}
+// ближайшая свободная точка (для спавна, приземлений и ящиков)
+function findFreeNear(x, y, r) {
+  if (!blockedAt(x, y, r)) return { x, y };
+  for (let d = 20; d <= 800; d += 20)
+    for (let a = 0; a < 16; a++) {
+      const px = x + Math.cos(a / 16 * Math.PI * 2) * d, py = y + Math.sin(a / 16 * Math.PI * 2) * d;
+      if (!blockedAt(px, py, r)) return { x: px, y: py };
+    }
+  return { x, y };
+}
 
 
 // ---------- Лидерборд (Supabase) ----------
@@ -227,7 +281,7 @@ function startGame() {
     document.getElementById('nameError').textContent = 'Введите имя (минимум 2 символа)';
     return;
   }
-  if (mapState === 'loading') {
+if (mapState === 'loading' || maskState === 'loading') {
     document.getElementById('nameError').textContent = 'Загружается карта, нажмите ещё раз через секунду...';
     return;
   }
@@ -482,8 +536,10 @@ function updateBoss(dt) {
   const ang = Math.atan2(player.y - boss.y, player.x - boss.x);
   const dist = Math.hypot(player.x - boss.x, player.y - boss.y);
   if (dist > 200) {
+    const ox = boss.x, oy = boss.y;
     boss.x += Math.cos(ang) * boss.speed * dt;
     boss.y += Math.sin(ang) * boss.speed * dt;
+    resolveMove(boss, ox, oy, 24);
   }
   boss.atk -= dt;
   if (boss.atk <= 0) {
@@ -775,8 +831,13 @@ function update(dt) {
 
   player.vx = dx * PLAYER_SPEED * speedMult; // скорость нужна боссу для упреждения гранат
   player.vy = dy * PLAYER_SPEED * speedMult;
-  player.x += player.vx * dt;
-  player.y += player.vy * dt;
+  const steps = Math.ceil(Math.hypot(player.vx, player.vy) * dt / 6) || 1;
+  for (let i = 0; i < steps; i++) {
+    const ox = player.x, oy = player.y;
+    player.x += player.vx * dt / steps;
+    player.y += player.vy * dt / steps;
+    resolveMove(player, ox, oy, 9);
+  }
   player.x = Math.max(PLAYER_SIZE, Math.min(WORLD_W - PLAYER_SIZE, player.x));
   player.y = Math.max(PLAYER_SIZE, Math.min(WORLD_H - PLAYER_SIZE, player.y));
   updateCamera();
@@ -813,6 +874,7 @@ function update(dt) {
   const rage = hasFx('rage') ? 1.4 : 1;
   for (const e of enemies) {
     const type = ENEMY_TYPES[e.type];
+    const ox = e.x, oy = e.y;
     e.hitFlash = Math.max(0, e.hitFlash - dt);
     const angle = Math.atan2(player.y - e.y, player.x - e.x);
     const dist = Math.hypot(player.x - e.x, player.y - e.y);
@@ -841,6 +903,7 @@ function update(dt) {
           triggerShake(5);
           beep(80, 0.2, 'sawtooth', 0.08);
           e.jump = null;
+          Object.assign(e, findFreeNear(e.x, e.y, e.size * 0.4));
           e.jumpCd = type.jumpCd * (0.8 + Math.random() * 0.4);
         }
       } else {
@@ -860,6 +923,7 @@ function update(dt) {
       e.x += Math.cos(angle) * sp * dt;
       e.y += Math.sin(angle) * sp * dt;
     }
+    if (!e.jump) resolveMove(e, ox, oy, e.size * 0.4);
   }
 
   // --- босс ---
