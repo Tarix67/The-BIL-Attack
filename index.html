@@ -215,7 +215,7 @@ const ENEMY_SPRITES = {
   shooter: makeSkins(36, ['Парасат.png', 'Алих(9).png', '9.png', 'Танжик.png'])
 };
 const BOSS_SPRITES = [ // по порядку BOSS_DEFS: Гренадёр, Прыгун, Метатель, Хаос
-  makeSkins(96,  ['boss1_a.png', 'boss1_b.png', 'boss1_c.png'),
+  makeSkins(96,  ['boss1_a.png', 'boss1_b.png', 'boss1_c.png']),
   makeSkins(96,  ['boss2_a.png', 'boss2_b.png', 'boss2_c.png']),
   makeSkins(96,  ['boss3_a.png', 'boss3_b.png', 'boss3_c.png']),
   makeSkins(110, ['boss4_a.png', 'boss4_b.png', 'boss4_c.png'])
@@ -1028,7 +1028,6 @@ function spawnEnemy(forceType) {
     jumpCd: type.jumper ? 1 + Math.random() * type.jumpCd : 0,
     fireTimer: type.ranged ? Math.random() * type.shootInterval : 0
   });
-  
 }
 
 // ---------- Обновление ----------
@@ -1345,17 +1344,25 @@ function drawShape(shape, x, y, s, color) {
   ctx.restore();
 }
 
-function draw() {
-  if (!drawSprite(ENEMY_SPRITES[e.type][e.skin], e.x, e.y - lift, e.hitFlash > 0, e.x < player.x))
-  drawShape(ENEMY_TYPES[e.type].shape, e.x, e.y - lift, e.size, e.hitFlash > 0 ? '#ffffff' : e.color);
-
-  if (!drawSprite(BOSS_SPRITES[boss.n % BOSS_DEFS.length][boss.skin], boss.x, boss.y - lift, boss.hitFlash > 0, boss.x < player.x)) {
-  drawShape(boss.def.shape, boss.x, boss.y - lift, boss.size, boss.hitFlash > 0 ? '#ffffff' : boss.def.color);
-  ctx.fillStyle = '#0d1117';
-  ctx.fillRect(boss.x - 12, boss.y - lift - 6, 7, 7);
-  ctx.fillRect(boss.x + 5, boss.y - lift - 6, 7, 7);
+// рисует спрайт моба/босса по центру (x, y); flash — осветление при попадании;
+// faceRight === false — зеркалить; false в ответе — картинки нет (тогда рисуется старая фигура)
+function drawSprite(s, x, y, flash, faceRight) {
+  if (!s || !s.ok) return false;
+  const fw = s.img.naturalWidth / s.cols, fh = s.img.naturalHeight / s.rows;
+  const frames = s.cols * s.rows;
+  const f = frames > 1 ? Math.floor(performance.now() / 1000 * s.fps) % frames : 0;
+  const w = s.draw, h = s.draw * fh / fw;
+  ctx.save();
+  ctx.translate(x, y);
+  if (faceRight === false) ctx.scale(-1, 1);
+  ctx.imageSmoothingEnabled = false;
+  if (flash) ctx.filter = 'brightness(3)';
+  ctx.drawImage(s.img, (f % s.cols) * fw, Math.floor(f / s.cols) * fh, fw, fh, -w / 2, -h / 2, w, h);
+  ctx.restore();
+  return true;
 }
-  
+
+function draw() {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, W, H);
 
@@ -1454,7 +1461,8 @@ function draw() {
       ctx.strokeStyle = 'rgba(255,80,80,0.35)'; ctx.lineWidth = 2;
       ctx.beginPath(); ctx.arc(e.jump.tx, e.jump.ty, 26, 0, Math.PI * 2); ctx.stroke();
     }
-    drawShape(ENEMY_TYPES[e.type].shape, e.x, e.y - lift, e.size, e.hitFlash > 0 ? '#ffffff' : e.color);
+    if (!drawSprite(ENEMY_SPRITES[e.type][e.skin], e.x, e.y - lift, e.hitFlash > 0, e.x < player.x))
+      drawShape(ENEMY_TYPES[e.type].shape, e.x, e.y - lift, e.size, e.hitFlash > 0 ? '#ffffff' : e.color);
   }
 
   // босс (при прыжке — тень на земле + тело, подброшенное вверх только в полёте)
@@ -1465,10 +1473,12 @@ function draw() {
       ctx.fillStyle = 'rgba(0,0,0,0.4)';
       ctx.beginPath(); ctx.ellipse(boss.x, boss.y, boss.size / 2, boss.size / 4, 0, 0, Math.PI * 2); ctx.fill();
     }
-    drawShape(boss.def.shape, boss.x, boss.y - lift, boss.size, boss.hitFlash > 0 ? '#ffffff' : boss.def.color);
-    ctx.fillStyle = '#0d1117';
-    ctx.fillRect(boss.x - 12, boss.y - lift - 6, 7, 7);
-    ctx.fillRect(boss.x + 5, boss.y - lift - 6, 7, 7);
+    if (!drawSprite(BOSS_SPRITES[boss.n % BOSS_DEFS.length][boss.skin], boss.x, boss.y - lift, boss.hitFlash > 0, boss.x < player.x)) {
+      drawShape(boss.def.shape, boss.x, boss.y - lift, boss.size, boss.hitFlash > 0 ? '#ffffff' : boss.def.color);
+      ctx.fillStyle = '#0d1117';
+      ctx.fillRect(boss.x - 12, boss.y - lift - 6, 7, 7);
+      ctx.fillRect(boss.x + 5, boss.y - lift - 6, 7, 7);
+    }
   }
 
   if (plane) {
