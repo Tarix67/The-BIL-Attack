@@ -209,16 +209,16 @@ function makeSkins(draw, files, cols = 1, rows = 1, fps = 6) {
   return files.map(src => { const s = loadSprite(src); Object.assign(s, { draw, cols, rows, fps }); return s; });
 }
 const ENEMY_SPRITES = {
-  chaser:  makeSkins(36, ['8.png', '88 (1).png', '8888 (1).png', 'Сулейман (8) .png', 'Димаш (1).png']),
+  chaser:  makeSkins(36, ['8.png', '88 (1).png', '8888 (1).png', 'Сулейман (8).png', 'Димаш (1).png']),
   runner:  makeSkins(30, ['7.png', '77.png', '777.png', '7777.png', 'Алимжан(7).png']),
   giant:   makeSkins(80, ['Алихан.png', 'Рахат.png', 'Алмаз.png', 'Айдар.png']),
   shooter: makeSkins(36, ['Парасат.png', 'Алих(9).png', '9.png', 'Танжик.png'])
 };
 const BOSS_SPRITES = [ // по порядку BOSS_DEFS: Гренадёр, Прыгун, Метатель, Хаос
-  makeSkins(96,  ['boss1_a.png', 'boss1_b.png', 'boss1_c.png']),
-  makeSkins(96,  ['boss2_a.png', 'boss2_b.png', 'boss2_c.png']),
+  makeSkins(96,  ['Асанали аби.png']),
+  makeSkins(96,  ['Шухрат агай.png']),
   makeSkins(96,  ['boss3_a.png', 'boss3_b.png', 'boss3_c.png']),
-  makeSkins(110, ['boss4_a.png', 'boss4_b.png', 'boss4_c.png'])
+  makeSkins(110, ['Ахмет агай.png'])
 ];
 const pickSkin = list => Math.floor(Math.random() * list.length);
 const HERO_DRAW_SIZE = 44;   // ширина героя на экране в игровых единицах (хитбокс остаётся 22)
