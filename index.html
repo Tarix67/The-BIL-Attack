@@ -186,6 +186,11 @@ const medkitImg = new Image();
 let medkitReady = false;
 medkitImg.onload = () => { medkitReady = true; };
 medkitImg.src = MEDKIT_SPRITE;
+  // ---------- Птичка вместо самолёта ----------
+const PLANE_SPRITE = 'bird.png';
+const PLANE_DRAW_SIZE = 70; // ширина птички на экране в игровых единицах
+const BIRD_BASE_ANGLE = -0.7; // в картинке птичка летит вправо-вверх (~40°)
+const planeSprite = loadSprite(PLANE_SPRITE);
 
 // ---------- Герои (модельки игрока) ----------
 // После каждого убитого босса игрок становится следующим героем из списка (по кругу).
@@ -1483,16 +1488,35 @@ function draw() {
   }
 
   if (plane) {
-    ctx.fillStyle = 'rgba(0,0,0,0.35)';
-    ctx.beginPath(); ctx.ellipse(plane.x, plane.y, 30, 16, 0, 0, Math.PI * 2); ctx.fill();
-    const angle = Math.atan2(plane.endY - plane.startY, plane.endX - plane.startX);
+  // тень на земле
+  ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  ctx.beginPath(); ctx.ellipse(plane.x, plane.y + 14, 28, 12, 0, 0, Math.PI * 2); ctx.fill();
+
+  const heading = Math.atan2(plane.endY - plane.startY, plane.endX - plane.startX);
+  if (planeSprite.ok) {
+    // летит влево — зеркалим, чтобы птичка не оказалась вверх ногами
+    const cosH = Math.cos(heading);
+    const flip = cosH < -0.01;
+    const a = flip ? Math.atan2(Math.sin(heading), -cosH) : heading;
+    const w = PLANE_DRAW_SIZE, h = PLANE_DRAW_SIZE * planeSprite.img.naturalHeight / planeSprite.img.naturalWidth;
     ctx.save();
     ctx.translate(plane.x, plane.y);
-    ctx.rotate(angle);
+    if (flip) ctx.scale(-1, 1);
+    ctx.rotate(a - BIRD_BASE_ANGLE);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(planeSprite.img, -w / 2, -h / 2, w, h);
+    ctx.restore();
+  } else {
+    // запасной вариант: старый самолётик, если картинка не загрузилась
+    ctx.save();
+    ctx.translate(plane.x, plane.y);
+    ctx.rotate(heading);
     ctx.fillStyle = '#cccccc';
     ctx.beginPath(); ctx.moveTo(20, 0); ctx.lineTo(-16, -10); ctx.lineTo(-8, 0); ctx.lineTo(-16, 10); ctx.closePath(); ctx.fill();
     ctx.restore();
   }
+}
 
   // игрок: герой-моделька, а если картинки не загрузились — кубик
   if (!drawHero()) {
