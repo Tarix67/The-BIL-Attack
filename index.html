@@ -202,6 +202,25 @@ const HEROES = [
   { name: 'Abi', calm: 'Сулейман аби веселый.png', hurt: 'Сулейман аби грустный.png', cols: 1, rows: 1, fps: 6 },
   { name: 'Agay', calm: 'Аян агай веселый.png', hurt: 'Аян агай грустный.png', cols: 1, rows: 1, fps: 6 },
 ];
+// ---------- Модельки мобов и боссов (несколько вариантов на каждого) ----------
+// makeSkins(ширина на экране, [файлы], столбцы, строки, fps).
+// Столбцы/строки/fps нужны только если в каждой картинке лист кадров анимации.
+function makeSkins(draw, files, cols = 1, rows = 1, fps = 6) {
+  return files.map(src => { const s = loadSprite(src); Object.assign(s, { draw, cols, rows, fps }); return s; });
+}
+const ENEMY_SPRITES = {
+  chaser:  makeSkins(36, ['8.png', '88 (1).png', '8888 (1).png', 'Сулейман (8) .png', 'Димаш (1).png']),
+  runner:  makeSkins(30, ['7.png', '77.png', '777.png', '7777.png', 'Алимжан(7).png']),
+  giant:   makeSkins(80, ['Алихан.png', 'Рахат.png', 'Алмаз.png', 'Айдар.png']),
+  shooter: makeSkins(36, ['Парасат.png', 'Алих(9).png', '9.png', 'Танжик.png'])
+};
+const BOSS_SPRITES = [ // по порядку BOSS_DEFS: Гренадёр, Прыгун, Метатель, Хаос
+  makeSkins(96,  ['boss1_a.png', 'boss1_b.png', 'boss1_c.png'),
+  makeSkins(96,  ['boss2_a.png', 'boss2_b.png', 'boss2_c.png']),
+  makeSkins(96,  ['boss3_a.png', 'boss3_b.png', 'boss3_c.png']),
+  makeSkins(110, ['boss4_a.png', 'boss4_b.png', 'boss4_c.png'])
+];
+const pickSkin = list => Math.floor(Math.random() * list.length);
 const HERO_DRAW_SIZE = 44;   // ширина героя на экране в игровых единицах (хитбокс остаётся 22)
 const HERO_FLIP = true;      // true — зеркалить героя, когда он идёт влево (в картинках он должен смотреть вправо)
 const HURT_FACE_TIME = 1.0;  // сколько секунд держится злая моделька после получения урона
@@ -637,6 +656,7 @@ function spawnBoss() {
   const def = BOSS_DEFS[n % BOSS_DEFS.length];
   const hp = 130 + n * 80;
   boss = {
+    skin: pickSkin(BOSS_SPRITES[n % BOSS_DEFS.length]),
     def, n, hp, maxHp: hp, size: 56, speed: 75 + n * 6, atk: 1.2, jump: null, hitFlash: 0,
     x: player.x < WORLD_W / 2 ? WORLD_W - 200 : 200,
     y: player.y < WORLD_H / 2 ? WORLD_H - 200 : 200
@@ -996,6 +1016,7 @@ function spawnEnemy(forceType) {
   const hueBase = THEMES[currentTheme].enemyHueBase;
   const speedFrac = Math.min(type.speedCap, type.speedFrac + (wave - 1) * ENEMY_SPEED_GROWTH);
   enemies.push({
+    skin: pickSkin(ENEMY_SPRITES[typeKey]),
     type: typeKey, x, y,
     hp: type.hpBase + Math.floor(wave / 3),
     speed: PLAYER_SPEED * speedFrac,
@@ -1007,6 +1028,7 @@ function spawnEnemy(forceType) {
     jumpCd: type.jumper ? 1 + Math.random() * type.jumpCd : 0,
     fireTimer: type.ranged ? Math.random() * type.shootInterval : 0
   });
+  
 }
 
 // ---------- Обновление ----------
@@ -1324,6 +1346,16 @@ function drawShape(shape, x, y, s, color) {
 }
 
 function draw() {
+  if (!drawSprite(ENEMY_SPRITES[e.type][e.skin], e.x, e.y - lift, e.hitFlash > 0, e.x < player.x))
+  drawShape(ENEMY_TYPES[e.type].shape, e.x, e.y - lift, e.size, e.hitFlash > 0 ? '#ffffff' : e.color);
+
+  if (!drawSprite(BOSS_SPRITES[boss.n % BOSS_DEFS.length][boss.skin], boss.x, boss.y - lift, boss.hitFlash > 0, boss.x < player.x)) {
+  drawShape(boss.def.shape, boss.x, boss.y - lift, boss.size, boss.hitFlash > 0 ? '#ffffff' : boss.def.color);
+  ctx.fillStyle = '#0d1117';
+  ctx.fillRect(boss.x - 12, boss.y - lift - 6, 7, 7);
+  ctx.fillRect(boss.x + 5, boss.y - lift - 6, 7, 7);
+}
+  
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, W, H);
 
