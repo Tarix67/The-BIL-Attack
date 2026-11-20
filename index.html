@@ -8,6 +8,11 @@
   html, body { margin:0; padding:0; height:100%; width:100%; background:#0d1117; font-family:'Courier New',monospace; color:#eee; overflow:hidden; touch-action:none; overscroll-behavior:none; -webkit-user-select:none; user-select:none; }
   #ui { position:fixed; top:10px; left:10px; right:60px; display:flex; justify-content:space-between; font-size:clamp(13px,3.5vw,18px); text-shadow:2px 2px 0 #000; pointer-events:none; z-index:5; }
   #fx { position:fixed; bottom:12px; left:10px; font-size:clamp(11px,3vw,14px); line-height:1.35; text-shadow:1px 1px 0 #000; pointer-events:none; z-index:5; }
+  #levelup { position:fixed; top:34%; left:0; right:0; text-align:center; pointer-events:none; z-index:8; opacity:0; text-shadow:3px 3px 0 #000; }
+  #levelup b { display:block; font-size:clamp(34px,10vw,64px); color:#ffd93d; letter-spacing:4px; }
+  #levelup small { display:block; font-size:clamp(14px,4vw,22px); color:#fff; margin-top:6px; }
+  #levelup.show { animation:lvl 2.6s ease-out forwards; }
+  @keyframes lvl { 0% { opacity:0; transform:scale(.4); } 12% { opacity:1; transform:scale(1.15); } 22% { transform:scale(1); } 78% { opacity:1; } 100% { opacity:0; transform:translateY(-30px); } }
   #toast { position:fixed; top:22%; left:0; right:0; text-align:center; font-size:clamp(18px,5vw,28px); font-weight:bold; text-shadow:2px 2px 0 #000; pointer-events:none; opacity:0; transition:opacity .25s; z-index:7; }
   canvas { image-rendering:pixelated; display:block; background:#0d1117; touch-action:none; }
   #pauseBtn { position:fixed; top:8px; right:8px; width:42px; height:42px; border-radius:50%; background:rgba(0,0,0,.45); border:2px solid rgba(255,255,255,.4); color:#fff; font-size:18px; display:flex; align-items:center; justify-content:center; z-index:6; touch-action:manipulation; }
@@ -37,6 +42,7 @@
   <span>Волна: <span id="wave">1</span> (<span id="remaining">0</span>) <span id="wtimer">45</span>с</span></div>
 <div id="fx"></div>
 <div id="toast"></div>
+<div id="levelup"><b>LEVEL UP!</b><small id="levelupName"></small></div>
 
 <button id="pauseBtn">⏸</button>
 
@@ -177,6 +183,56 @@ const medkitImg = new Image();
 let medkitReady = false;
 medkitImg.onload = () => { medkitReady = true; };
 medkitImg.src = MEDKIT_SPRITE;
+
+// ---------- Герои (модельки игрока) ----------
+// После каждого убитого босса игрок становится следующим героем из списка (по кругу).
+// У героя две модельки: calm — обычная (весёлая), hurt — злая (показывается после получения урона).
+// Файлы лежат рядом с index.html. cols x rows — сколько кадров в картинке по горизонтали и вертикали
+// (1 x 1 = одна статичная картинка), fps — скорость анимации. Героев можно добавлять и убирать.
+// Если картинка не загрузилась, вместо героя рисуется кубик, и игра не ломается.
+const HEROES = [
+  { name: 'Герой 1', calm: 'Жанторе Веселый.png', hurt: 'Жанторе грустный.png', cols: 1, rows: 1, fps: 6 },
+  { name: 'Герой 2', calm: 'Абылай веселый.png', hurt: 'Абылай грустный.png', cols: 1, rows: 1, fps: 6 },
+  { name: 'Герой 3', calm: 'Ахмет(9) веселый.png', hurt: 'Ахмет(9) грустный.png', cols: 1, rows: 1, fps: 6 },
+  { name: 'Герой 4', calm: 'Жангир веселый.png', hurt: 'Жангир грустный.png', cols: 1, rows: 1, fps: 6 }
+  { name: 'Герой 5', calm: 'Адлет аби веселый.png', hurt: 'Адлет аби грустный.png', cols: 1, rows: 1, fps: 6 },
+  { name: 'Герой 6', calm: 'Сулейман аби веселый.png', hurt: 'Сулейман аби грустный.png', cols: 1, rows: 1, fps: 6 },
+  { name: 'Герой 7', calm: 'Аян агай веселый.png', hurt: 'Аян агай грустный.png', cols: 1, rows: 1, fps: 6 },
+];
+const HERO_DRAW_SIZE = 44;   // ширина героя на экране в игровых единицах (хитбокс остаётся 22)
+const HERO_FLIP = true;      // true — зеркалить героя, когда он идёт влево (в картинках он должен смотреть вправо)
+const HURT_FACE_TIME = 1.0;  // сколько секунд держится злая моделька после получения урона
+let heroIndex = 0;           // номер текущего героя (растёт после каждого босса)
+let hurtFaceT = 0;           // сколько ещё секунд показывать злую моделька
+let facing = 1;              // 1 — смотрит вправо, -1 — влево
+
+function loadSprite(src) {
+  const sp = { img: new Image(), ok: false };
+  sp.img.onload = () => { sp.ok = true; };
+  sp.img.src = src;
+  return sp;
+}
+for (const h of HEROES) { h.calmSprite = loadSprite(h.calm); h.hurtSprite = loadSprite(h.hurt); }
+
+// рисует текущего героя; false — если картинки не загрузились (тогда рисуется кубик)
+function drawHero() {
+  const h = HEROES[heroIndex % HEROES.length];
+  if (!h) return false;
+  let sp = hurtFaceT > 0 ? h.hurtSprite : h.calmSprite;
+  if (!sp.ok) sp = hurtFaceT > 0 ? h.calmSprite : h.hurtSprite; // запасной вариант, если одна из двух не загрузилась
+  if (!sp.ok) return false;
+  const fw = sp.img.naturalWidth / h.cols, fh = sp.img.naturalHeight / h.rows;
+  const frames = h.cols * h.rows;
+  const f = frames > 1 ? Math.floor(performance.now() / 1000 * h.fps) % frames : 0;
+  const w = HERO_DRAW_SIZE, hh = HERO_DRAW_SIZE * fh / fw;
+  ctx.save();
+  ctx.translate(player.x, player.y);
+  if (HERO_FLIP && facing < 0) ctx.scale(-1, 1);
+  ctx.imageSmoothingEnabled = false; // чтобы пиксель-арт не размывался
+  ctx.drawImage(sp.img, (f % h.cols) * fw, Math.floor(f / h.cols) * fh, fw, fh, -w / 2, -hh / 2, w, hh);
+  ctx.restore();
+  return true;
+}
 
 // ---------- Карта (картинка мира) ----------
 // Файл лежит рядом с index.html. Если файла нет или он не загрузился, рисуется тёмный фон с сеткой.
@@ -462,6 +518,16 @@ function showToast(text, good) {
   toastT = 1.8;
 }
 
+// ---------- Level Up (после убийства босса) ----------
+const levelEl = document.getElementById('levelup'), levelNameEl = document.getElementById('levelupName');
+function showLevelUp(name) {
+  levelNameEl.textContent = name || '';
+  levelEl.classList.remove('show');
+  void levelEl.offsetWidth; // перезапуск CSS-анимации
+  levelEl.classList.add('show');
+  [523, 659, 784, 1047].forEach((f, i) => setTimeout(() => beep(f, 0.16, 'square', 0.07), i * 110));
+}
+
 // ---------- Темы ----------
 const THEMES = {
   desert: { label: 'Пустыня', enemyLabel: 'Монстр',  playerLabel: 'Солдат',  playerColor: '#4ecdc4', enemyHueBase: 350, bgColor: '#0d1117', gridColor: '#1e2030', wallColor: '#e94560' },
@@ -678,6 +744,8 @@ function updateBoss(dt) {
 function killBoss() {
   for (let i = 0; i < 6; i++) spawnParticles(boss.x, boss.y, boss.def.color);
   player.guns = Math.min(MAX_GUNS, player.guns + 1);
+  heroIndex = (heroIndex + 1) % HEROES.length; // новый герой
+  showLevelUp(HEROES[heroIndex].name);
   pickups.push(makeCrate(boss.x, boss.y, true));
   // очки за босса не начисляем: счёт зависит только от времени (так работает проверка лидерборда)
   enemyBullets = [];
@@ -691,6 +759,7 @@ function killBoss() {
 // ---------- Урон игроку ----------
 function flashHurt(amount) {
   hurtFlash = Math.min(HURT_FLASH_MAX, hurtFlash + 0.08 + amount * 0.012);
+  hurtFaceT = HURT_FACE_TIME;
 }
 function damagePlayer(amount, shake) {
   if (hasFx('shield')) return;
@@ -765,6 +834,7 @@ function init() {
   waveEnemiesTotal = enemiesPerWave(wave);
   waveEnemiesSpawned = 0; waveBreakTimer = 0;
   gameOver = false; paused = false; shakeIntensity = 0; hurtFlash = 0;
+  heroIndex = 0; hurtFaceT = 0; facing = 1;
   plane = null; pickups = []; boss = null;
   updateCamera();
   document.getElementById('gameover').style.display = 'none';
@@ -930,6 +1000,7 @@ function update(dt) {
   shakeIntensity = Math.max(0, shakeIntensity - SHAKE_DECAY * dt);
   hurtFlag = false;
   hurtFlash = Math.max(0, hurtFlash - dt * 0.7);
+  hurtFaceT = Math.max(0, hurtFaceT - dt);
   if (toastT > 0 && (toastT -= dt) <= 0) toastEl.style.opacity = 0;
   for (const k in player.fx) player.fx[k] = Math.max(0, player.fx[k] - dt);
 
@@ -951,6 +1022,7 @@ function update(dt) {
 
   player.vx = dx * PLAYER_SPEED * speedMult; // скорость нужна боссу для упреждения гранат
   player.vy = dy * PLAYER_SPEED * speedMult;
+  if (Math.abs(player.vx) > 20) facing = player.vx < 0 ? -1 : 1; // куда смотрит герой
   const steps = Math.ceil(Math.hypot(player.vx, player.vy) * dt / 6) || 1;
   for (let i = 0; i < steps; i++) {
     const ox = player.x, oy = player.y;
@@ -1243,16 +1315,16 @@ function draw() {
   ctx.translate(-camera.x + shakeX, -camera.y + shakeY);
 
   if (mapState === 'ready') {
-    if (DEBUG_BLOCKS && mapState === 'ready') {
+    const eff = zoom * mapScale; // сколько экранных пикселей на один пиксель картинки
+    ctx.imageSmoothingEnabled = Math.abs(eff - Math.round(eff)) > 0.02; // чёткие пиксели, если масштаб целый
+    ctx.drawImage(mapImg, camera.x / mapScale, camera.y / mapScale, VW / mapScale, VH / mapScale, camera.x, camera.y, VW, VH);
+    if (DEBUG_BLOCKS) { // подсветка стен рисуется ПОВЕРХ карты
       ctx.globalAlpha = 0.4;
       if (maskState === 'ready') ctx.drawImage(maskImg, 0, 0, WORLD_W, WORLD_H);
       ctx.fillStyle = '#f00';
       for (const [rx, ry, rw, rh] of BLOCK_RECTS) ctx.fillRect(rx * mapScale, ry * mapScale, rw * mapScale, rh * mapScale);
       ctx.globalAlpha = 1;
-  }
-    const eff = zoom * mapScale; // сколько экранных пикселей на один пиксель картинки
-    ctx.imageSmoothingEnabled = Math.abs(eff - Math.round(eff)) > 0.02; // чёткие пиксели, если масштаб целый
-    ctx.drawImage(mapImg, camera.x / mapScale, camera.y / mapScale, VW / mapScale, VH / mapScale, camera.x, camera.y, VW, VH);
+    }
   } else {
     ctx.strokeStyle = THEMES[currentTheme].gridColor;
     ctx.lineWidth = 1;
@@ -1357,12 +1429,14 @@ function draw() {
     ctx.restore();
   }
 
-  // игрок
-  ctx.fillStyle = THEMES[currentTheme].playerColor;
-  ctx.fillRect(player.x - PLAYER_SIZE / 2, player.y - PLAYER_SIZE / 2, PLAYER_SIZE, PLAYER_SIZE);
-  ctx.fillStyle = '#0d1117';
-  ctx.fillRect(player.x - 6, player.y - 4, 3, 3);
-  ctx.fillRect(player.x + 3, player.y - 4, 3, 3);
+  // игрок: герой-моделька, а если картинки не загрузились — кубик
+  if (!drawHero()) {
+    ctx.fillStyle = THEMES[currentTheme].playerColor;
+    ctx.fillRect(player.x - PLAYER_SIZE / 2, player.y - PLAYER_SIZE / 2, PLAYER_SIZE, PLAYER_SIZE);
+    ctx.fillStyle = '#0d1117';
+    ctx.fillRect(player.x - 6, player.y - 4, 3, 3);
+    ctx.fillRect(player.x + 3, player.y - 4, 3, 3);
+  }
   if (hasFx('shield')) {
     ctx.strokeStyle = 'rgba(80,200,255,0.8)'; ctx.lineWidth = 3;
     ctx.beginPath(); ctx.arc(player.x, player.y, PLAYER_SIZE, 0, Math.PI * 2); ctx.stroke();
