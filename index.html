@@ -638,10 +638,10 @@ function enemiesPerWave(w) { return Math.min(24, 4 + w * 2); }
 // ---------- Боссы ----------
 // Каждый следующий босс другой: цикл из 4 типов, дальше те же типы, но сильнее.
 const BOSS_DEFS = [
-  { name: 'Гренадёр', color: '#ff9f1c', shape: 'square',   attacks: ['grenade'] },
-  { name: 'Прыгун',   color: '#9b5de5', shape: 'circle',   attacks: ['jump'] },
-  { name: 'Метатель', color: '#00bbf9', shape: 'triangle', attacks: ['throw'] },
-  { name: 'Хаос',     color: '#f15bb5', shape: 'diamond',  attacks: ['grenade', 'jump', 'throw'] }
+  { name: 'Асанали аби', color: '#ff9f1c', shape: 'square',   attacks: ['grenade'] },
+  { name: 'Шухрат агай',   color: '#9b5de5', shape: 'circle',   attacks: ['jump'] },
+  { name: 'Акбаян апай', color: '#00bbf9', shape: 'triangle', attacks: ['throw'] },
+  { name: 'Ахмет агай',     color: '#f15bb5', shape: 'diamond',  attacks: ['grenade', 'jump', 'throw'] }
 ];
 const THROWS = [
   { shape: 'square',   spd: 320, r: 7,  dmg: 6,  color: '#ff5566' },
