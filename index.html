@@ -39,7 +39,8 @@
 <div id="ui">
   <span>HP: <span id="hp">100</span></span>
   <span>Счёт: <span id="score">0</span></span>
-  <span>Волна: <span id="wave">1</span> (<span id="remaining">0</span>) <span id="wtimer">45</span>с</span></div>
+  <span>Волна: <span id="wave">1</span> (<span id="remaining">0</span>) <span id="wtimer">45</span>с</span>
+</div>
 <div id="fx"></div>
 <div id="toast"></div>
 <div id="levelup"><b>LEVEL UP!</b><small id="levelupName"></small></div>
@@ -145,6 +146,13 @@ const BOSS_EVERY = 5;
 const WAVE_TIME = 45;       // секунд на обычную волну
 const BOSS_WAVE_TIME = 75;  // секунд на волну с боссом
 const MAX_ENEMIES = 80;     // предел монстров на карте, чтобы игра не тормозила
+const MAX_GUNS = 4;
+const ENEMY_DROP_CHANCE = 0.05;
+const VIEW_TARGET = 600; // сколько мировых единиц должно помещаться по МЕНЬШЕЙ стороне экрана
+const MIN_ZOOM = 0.45;
+const AUTO_RANGE = 380;  // дальность, на которой игрок видит цели и стреляет
+const BOSS_JUMP_RANGE = 420; // максимальная дальность прыжка босса
+const BULLET_COLOR = '#0a2a8a'; // тёмно-синий
 let waveTimer = WAVE_TIME;
 
 function waveTimeFor(w) { return w % BOSS_EVERY === 0 ? BOSS_WAVE_TIME : WAVE_TIME; }
@@ -161,13 +169,6 @@ function nextWave(forced) {
   if (isBossWave && !boss) spawnBoss(); // если прошлый босс ещё жив, второго не создаём
   if (!plane && wave % PLANE_WAVE_INTERVAL === 0) spawnPlane();
 }
-const MAX_GUNS = 4;
-const ENEMY_DROP_CHANCE = 0.05;
-const VIEW_TARGET = 600; // сколько мировых единиц должно помещаться по МЕНЬШЕЙ стороне экрана
-const MIN_ZOOM = 0.45;
-const AUTO_RANGE = 380;  // дальность, на которой игрок видит цели и стреляет
-const BOSS_JUMP_RANGE = 420; // максимальная дальность прыжка босса
-const BULLET_COLOR = '#0a2a8a'; // тёмно-синий
 
 let lastTime = 0;
 
@@ -246,8 +247,13 @@ const MAP_SCALE = null;
 const mapImg = new Image();
 let mapState = 'loading'; // 'loading' | 'ready' | 'none'
 let mapScale = 1;
-mapImg.onload = () => { mapState = 'ready'; tryBuildGrid(); if (!started) init(); };mapImg.onerror = () => { mapState = 'none'; };
+mapImg.onload = () => { mapState = 'ready'; tryBuildGrid(); if (!started) init(); };
+mapImg.onerror = () => { mapState = 'none'; };
 mapImg.src = MAP_SPRITE;
+
+// ---------- Непроходимые зоны ----------
+// map_mask.png: тот же размер, что и map.png. Непрозрачный пиксель = стена, прозрачный = можно ходить.
+// BLOCK_RECTS: доп. прямоугольники [x, y, ширина, высота] в ПИКСЕЛЯХ map.png (можно использовать вместо маски).
 const MASK_SPRITE = 'map_mask.png';
 const BLOCK_RECTS = [];
 const DEBUG_BLOCKS = false; // true — подсветить непроходимые зоны красным, чтобы проверить маску
@@ -304,6 +310,7 @@ function findFreeNear(x, y, r) {
     }
   return { x, y };
 }
+
 // ---------- Поиск пути: карта расстояний до игрока ----------
 const NAV_CELL = 32; // размер клетки. Проходы уже ~2 клеток для монстров считаются закрытыми
 const NDX = [1, -1, 0, 0, 1, 1, -1, -1], NDY = [0, 0, 1, -1, 1, -1, 1, -1];
@@ -468,7 +475,7 @@ function startGame() {
     document.getElementById('nameError').textContent = 'Введите имя (минимум 2 символа)';
     return;
   }
-if (mapState === 'loading' || maskState === 'loading') {
+  if (mapState === 'loading' || maskState === 'loading') {
     document.getElementById('nameError').textContent = 'Загружается карта, нажмите ещё раз через секунду...';
     return;
   }
@@ -644,11 +651,11 @@ function bossAttack() {
   const ang = Math.atan2(player.y - boss.y, player.x - boss.x);
   const dist = Math.hypot(player.x - boss.x, player.y - boss.y);
   if (a === 'grenade') {
-    // гранаты целятся с упреждением: туда, где игрок окажется к моменту падения,
-    // поэтому просто кружить вокруг босса уже не получится
-    const count = 1 + Math.floor(boss.n / 3);   const flight = dist / GRENADE_SPEED;
+    // гранаты целятся с упреждением: туда, где игрок окажется к моменту падения
+    const count = 1 + Math.floor(boss.n / 3);
+    const flight = dist / GRENADE_SPEED;
     for (let i = 0; i < count; i++) {
-      const lead = flight * (0.7 + Math.random() * 0.5);
+      const lead = flight * (0.4 + Math.random() * 0.5);
       const tx = Math.max(40, Math.min(WORLD_W - 40, player.x + player.vx * lead));
       const ty = Math.max(40, Math.min(WORLD_H - 40, player.y + player.vy * lead));
       const aa = Math.atan2(ty - boss.y, tx - boss.x) + (i - (count - 1) / 2) * 0.28;
@@ -660,7 +667,7 @@ function bossAttack() {
     }
     sfxEnemyShot();
   } else if (a === 'throw') {
-    // очень широкий веер (~160°), центр — с небольшим упреждением. Кружить рядом уже не получится
+    // очень широкий веер (~160°), центр — с небольшим упреждением
     const count = 14 + Math.floor(boss.n / 2);
     const spread = Math.PI * 0.9;
     const lead = dist / 300 * 0.6;
@@ -674,7 +681,7 @@ function bossAttack() {
       });
     }
     sfxEnemyShot();
-    } else if (a === 'jump') {
+  } else if (a === 'jump') {
     if (dist > BOSS_JUMP_RANGE * 1.6) return 'wait'; // игрок далеко: не прыгаем, а идём к нему
     boss.jump = { t: 0, dur: 1.3, sx: boss.x, sy: boss.y, tx: boss.x, ty: boss.y,
                   k: 0.8 + Math.random() * 0.25, jx: (Math.random() - 0.5) * 110, jy: (Math.random() - 0.5) * 110 };
@@ -691,7 +698,7 @@ function explodeBomb(b, out) {
     const a = off + (i / count) * Math.PI * 2;
     out.push({
       x: b.x, y: b.y, vx: Math.cos(a) * SHARD_SPEED, vy: Math.sin(a) * SHARD_SPEED,
-      damage: 8, r: 7, shape: 'diamond', color: '#ffb703'
+      damage: 7, r: 7, shape: 'diamond', color: '#ffb703'
     });
   }
   if (Math.hypot(b.x - player.x, b.y - player.y) < 100) damagePlayer(10, 8);
@@ -723,8 +730,8 @@ function updateBoss(dt) {
     boss.y = j.sy + (j.ty - j.sy) * p;
     if (p >= 1) {
       // приземление → удар по площади + звуковая волна: чем дальше игрок, тем меньше урон
-      shockwaves.push({ x: boss.x, y: boss.y, r: 0, max: 400 + boss.n * 25, spd: 300, dmgBase: 5, dmgVar: 24, shake: 10, hit: false });
-      if (Math.hypot(player.x - boss.x, player.y - boss.y) < 60) damagePlayer(25, 12);
+      shockwaves.push({ x: boss.x, y: boss.y, r: 0, max: 400 + boss.n * 25, spd: 300, dmgBase: 5, dmgVar: 18, shake: 10, hit: false });
+      if (Math.hypot(player.x - boss.x, player.y - boss.y) < 60) damagePlayer(18, 12);
       triggerShake(14);
       sfxBoom();
       Object.assign(boss, findFreeNear(boss.x, boss.y, 28));
@@ -745,11 +752,11 @@ function updateBoss(dt) {
   boss.atk -= dt;
   if (boss.atk <= 0) {
     const a = bossAttack();
-      if (!boss.jump) boss.atk = a === 'wait' ? 0.4
+    if (!boss.jump) boss.atk = a === 'wait' ? 0.4
       : a === 'throw' ? Math.max(1.5, 2.4 - boss.n * 0.1)
       : Math.max(1.8, 3.0 - boss.n * 0.12);
   }
-  if (dist < boss.size / 2 + PLAYER_SIZE / 2) damagePlayer(CONTACT_DPS * 2 * dt, 3);
+  if (dist < boss.size / 2 + PLAYER_SIZE / 2) damagePlayer(CONTACT_DPS * 1.5 * dt, 3);
 }
 
 function killBoss() {
@@ -833,7 +840,7 @@ function init() {
   resizeCanvas();
   switchTheme(currentTheme);
   computeWorldSize();
-  buildNav()
+  buildNav();
   player = { x: WORLD_W / 2, y: WORLD_H / 2, vx: 0, vy: 0, hp: 100, maxHp: 100, fireCooldown: 0, sprintTimer: 0, sprintCooldown: 0, guns: 1, fx: {} };
   Object.assign(player, findFreeNear(player.x, player.y, 12));
   bullets = []; enemyBullets = []; enemies = []; particles = []; shockwaves = [];
@@ -1075,7 +1082,7 @@ function update(dt) {
     return b.x > -10 && b.x < WORLD_W + 10 && b.y > -10 && b.y < WORLD_H + 10;
   });
 
-    // --- враги ---
+  // --- враги ---
   updateFlow(dt);
   const rage = hasFx('rage') ? 1.4 : 1;
   for (const e of enemies) {
@@ -1144,6 +1151,7 @@ function update(dt) {
       if (b.fuse <= 0 || Math.hypot(b.x - player.x, b.y - player.y) < 60) { explodeBomb(b, newShards); return false; }
       return true;
     }
+    if (isBlocked(b.x, b.y)) return false; // пули врагов не проходят сквозь стены
     if (Math.hypot(b.x - player.x, b.y - player.y) < PLAYER_SIZE / 2 + (b.r || 4)) {
       damagePlayer(b.damage, 8);
       return false;
@@ -1158,7 +1166,7 @@ function update(dt) {
     const d = Math.hypot(player.x - s.x, player.y - s.y);
     if (!s.hit && s.r >= d && d <= s.max) {
       s.hit = true;
-      // чем дальше игрок от центра, тем меньше урон (у босса вплотную ~30, на краю ~6)
+      // чем дальше игрок от центра, тем меньше урон
       damagePlayer(s.dmgBase + s.dmgVar * (1 - d / s.max), s.shake || 10);
     }
     return s.r < s.max;
@@ -1229,8 +1237,7 @@ function update(dt) {
     return p.life > 0;
   });
 
-  // --- волны: босс каждые BOSS_EVERY волн, следующая волна — только после его смерти ---
-    // --- волны: следующая начинается, когда текущая зачищена ИЛИ вышел таймер ---
+  // --- волны: следующая начинается, когда текущая зачищена ИЛИ вышел таймер ---
   if (waveBreakTimer <= 0) {
     waveTimer -= dt;
     if (waveTimer <= 0) nextWave(true);
@@ -1364,8 +1371,10 @@ function draw() {
 
   for (const p of particles) { ctx.fillStyle = p.color; ctx.fillRect(p.x - 2, p.y - 2, 4, 4); }
 
-  ctx.fillStyle = '#ffd93d';
-  for (const b of bullets) ctx.fillRect(b.x - 3, b.y - 3, 6, 6);
+  // пули игрока: тёмно-синие со светлой окантовкой
+  ctx.fillStyle = BULLET_COLOR;
+  ctx.strokeStyle = 'rgba(255,255,255,0.55)'; ctx.lineWidth = 1;
+  for (const b of bullets) { ctx.fillRect(b.x - 3, b.y - 3, 6, 6); ctx.strokeRect(b.x - 3, b.y - 3, 6, 6); }
 
   // пули врагов / бомбы / осколки
   for (const b of enemyBullets) {
@@ -1374,9 +1383,7 @@ function draw() {
       ctx.beginPath(); ctx.arc(b.x, b.y, 18, 0, Math.PI * 2); ctx.fill();
       ctx.strokeStyle = Math.floor(performance.now() / 120) % 2 ? '#ff5566' : '#ffb703';
       ctx.lineWidth = 3; ctx.stroke();
-    }
-    if (isBlocked(b.x, b.y)) return false; // пули врагов тоже не проходят сквозь стены
-    else {
+    } else {
       drawShape(b.shape || 'square', b.x, b.y, (b.r || 4) * 2, b.color || '#ff5566');
     }
   }
@@ -1418,11 +1425,11 @@ function draw() {
     drawShape(ENEMY_TYPES[e.type].shape, e.x, e.y - lift, e.size, e.hitFlash > 0 ? '#ffffff' : e.color);
   }
 
-  // босс (при прыжке — тень на земле + тело, подброшенное вверх)
+  // босс (при прыжке — тень на земле + тело, подброшенное вверх только в полёте)
   if (boss) {
     let lift = 0;
     if (boss.jump) {
-      lift = Math.sin(Math.PI * Math.min(1, boss.jump.t / boss.jump.dur)) * 90;
+      lift = Math.sin(Math.PI * (boss.jump.p || 0)) * 90;
       ctx.fillStyle = 'rgba(0,0,0,0.4)';
       ctx.beginPath(); ctx.ellipse(boss.x, boss.y, boss.size / 2, boss.size / 4, 0, 0, Math.PI * 2); ctx.fill();
     }
