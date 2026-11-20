@@ -628,7 +628,7 @@ const SHARD_SPEED = 250;
 function spawnBoss() {
   const n = wave / BOSS_EVERY - 1;
   const def = BOSS_DEFS[n % BOSS_DEFS.length];
-  const hp = 130 + n * 8x0;
+  const hp = 130 + n * 80;
   boss = {
     def, n, hp, maxHp: hp, size: 56, speed: 75 + n * 6, atk: 1.2, jump: null, hitFlash: 0,
     x: player.x < WORLD_W / 2 ? WORLD_W - 200 : 200,
