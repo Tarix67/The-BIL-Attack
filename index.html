@@ -668,6 +668,7 @@ function startGame() {
   playerName = name;
   try { localStorage.setItem('playerName', name); } catch (e) {}
   started = true;
+  playMusic();
   lastTime = 0;
   startOverlay.style.display = 'none';
 }
@@ -677,6 +678,31 @@ nameInput.addEventListener('keydown', e => { if (e.key === 'Enter') startGame();
 // ---------- Звук ----------
 let audioCtx = null;
 let soundEnabled = true;
+
+// ---------- Фоновая музыка ----------
+const musicTracks = [
+  'music1.mp3',
+  'music2.mp3'
+];
+
+let currentTrack = 0;
+
+const music = new Audio();
+music.volume = 0.3; // громкость от 0 до 1
+
+function playMusic() {
+  if (!soundEnabled) return;
+
+  music.src = musicTracks[currentTrack];
+  music.play().catch(() => {});
+}
+
+// Когда песня заканчивается, включаем следующую
+music.addEventListener('ended', () => {
+  currentTrack = (currentTrack + 1) % musicTracks.length;
+  playMusic();
+});
+  
 function ensureAudio() {
   if (!audioCtx) {
     try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {}
@@ -1115,11 +1141,13 @@ const pauseOverlay = document.getElementById('pauseOverlay');
 const settingsOverlay = document.getElementById('settingsOverlay');
 
 function openPause() {
+  music.pause();
   if (gameOver || !started) return;
   paused = true;
   pauseOverlay.style.display = 'flex';
 }
 function closePause() {
+  if (soundEnabled) music.play().catch(() => {});
   paused = false;
   pauseOverlay.style.display = 'none';
 }
@@ -1140,7 +1168,16 @@ document.getElementById('backToPauseBtn').addEventListener('click', () => {
 document.querySelectorAll('#themeButtons button').forEach(btn => {
   btn.addEventListener('click', () => switchTheme(btn.dataset.theme));
 });
-document.getElementById('soundToggle').addEventListener('change', e => { soundEnabled = e.target.checked; });
+document.getElementById('soundToggle').addEventListener('change', e => {
+  soundEnabled = e.target.checked;
+
+  if (soundEnabled && started && !paused) {
+    music.play().catch(() => {});
+  } else {
+    music.pause();
+  }
+});
+  
 window.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
     if (settingsOverlay.style.display === 'flex') {
