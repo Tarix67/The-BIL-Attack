@@ -199,14 +199,22 @@ const planeSprite = loadSprite(PLANE_SPRITE);
 // (1 x 1 = одна статичная картинка), fps — скорость анимации. Героев можно добавлять и убирать.
 // Если картинка не загрузилась, вместо героя рисуется кубик, и игра не ломается.
 const HEROES = [
-  { name: '7th grade', calm: 'Жанторе Веселый.png', hurt: 'Жанторе грустный.png', cols: 1, rows: 1, fps: 6 },
-  { name: '8th grade', calm: 'Абылай веселый.png', hurt: 'Абылай грустный.png', cols: 1, rows: 1, fps: 6 },
-  { name: '9th grade', calm: 'Ахмет(9) веселый.png', hurt: 'Ахмет(9) грустный.png', cols: 1, rows: 1, fps: 6 },
-  { name: '10th grade', calm: 'Жангир веселый.png', hurt: 'Жангир грустный.png', cols: 1, rows: 1, fps: 6 },
-  { name: '11th grade', calm: 'Адлет аби веселый.png', hurt: 'Адлет аби грустный.png', cols: 1, rows: 1, fps: 6 },
-  { name: 'Abi', calm: 'Сулейман аби веселый.png', hurt: 'Сулейман аби грустный.png', cols: 1, rows: 1, fps: 6 },
-  { name: 'Agay', calm: 'Аян агай веселый.png', hurt: 'Аян агай грустный.png', cols: 1, rows: 1, fps: 6 },
-  { name: 'Teacher from Jupiter', calm: 'Тимур агай просто.png', hurt: 'Тимур агай злой.png', cols: 1, rows: 1, fps: 6 },
+  { name: '7th grade', calm: 'Жанторе Веселый.png', hurt: 'Жанторе грустный.png', cols: 1, rows: 1, fps: 6,
+    voices: ['hero1_1.mp3'] },
+  { name: '8th grade', calm: 'Абылай веселый.png', hurt: 'Абылай грустный.png', cols: 1, rows: 1, fps: 6,
+    voices: ['Абылай 8.m4a'] },
+  { name: '9th grade', calm: 'Ахмет(9) веселый.png', hurt: 'Ахмет(9) грустный.png', cols: 1, rows: 1, fps: 6,
+    voices: ['Ахмет 9.m4a'] },
+  { name: '10th grade', calm: 'Жангир веселый.png', hurt: 'Жангир грустный.png', cols: 1, rows: 1, fps: 6,
+    voices: ['Жангир 10.m4a'] },
+  { name: '11th grade', calm: 'Адлет аби веселый.png', hurt: 'Адлет аби грустный.png', cols: 1, rows: 1, fps: 6,
+    voices: ['Адлет аби 11.m4a'] },
+  { name: 'Abi', calm: 'Сулейман аби веселый.png', hurt: 'Сулейман аби грустный.png', cols: 1, rows: 1, fps: 6,
+    voices: ['hero6_1.mp3'] },
+  { name: 'Agay', calm: 'Аян агай веселый.png', hurt: 'Аян агай грустный.png', cols: 1, rows: 1, fps: 6,
+    voices: ['hero7_1.mp3'] },
+  { name: 'Teacher from Jupiter', calm: 'Тимур агай просто.png', hurt: 'Тимур агай злой.png', cols: 1, rows: 1, fps: 6,
+    voices: ['Тимур агай голос.ogg'] },
 ];
 // ---------- Модельки мобов и боссов (несколько вариантов на каждого) ----------
 // makeSkins(ширина на экране, [файлы], столбцы, строки, fps).
@@ -241,6 +249,47 @@ function loadSprite(src) {
   return sp;
 }
 for (const h of HEROES) { h.calmSprite = loadSprite(h.calm); h.hurtSprite = loadSprite(h.hurt); }
+
+// ---------- Голоса (записи звука) ----------
+// Файлы лежат рядом с index.html. Если файла нет или он не загрузился, звука просто не будет.
+function loadVoices(files) {
+  return (files || []).map(src => {
+    const a = new Audio(src);
+    a.preload = 'auto';
+    return a;
+  });
+}
+// Звук героя при уроне: у каждого героя свои файлы в поле voices (см. массив HEROES выше).
+// Если файлов несколько — выбирается случайный. Нет файлов у героя — звука нет.
+for (const h of HEROES) h.voiceSounds = loadVoices(h.voices);
+// Звук, когда босс атакует. По порядку BOSS_DEFS: Асанали, Шухрат, Айбар, Ахмет
+const BOSS_VOICES = [
+  loadVoices(['boss1.mp3']),
+  loadVoices(['boss2.mp3']),
+  loadVoices(['boss3.mp3']),
+  loadVoices(['boss4.mp3'])
+];
+const VOICE_COOLDOWN = 0.8; // герой не кричит чаще, чем раз в столько секунд (урон идёт каждый кадр)
+let heroVoiceCd = 0;
+let lastVoice = { hero: null, boss: null };
+
+function playVoice(list, who) {
+  if (!soundEnabled || !list || !list.length) return;
+  const prev = lastVoice[who];
+  if (prev) { prev.pause(); prev.currentTime = 0; }
+  const a = list[Math.floor(Math.random() * list.length)];
+  a.currentTime = 0;
+  lastVoice[who] = a;
+  a.play().catch(() => {});
+}
+function heroVoice() {
+  if (heroVoiceCd > 0) return;
+  heroVoiceCd = VOICE_COOLDOWN;
+  playVoice(HEROES[heroIndex % HEROES.length].voiceSounds, 'hero'); // голос текущего героя
+}
+function bossVoice() {
+  if (boss) playVoice(BOSS_VOICES[boss.n % BOSS_DEFS.length], 'boss');
+}
 
 // рисует текущего героя; false — если картинки не загрузились (тогда рисуется кубик)
 function drawHero() {
@@ -728,7 +777,7 @@ function makeMedkit(x, y) {
 function collectPickup(p) {
   const d = p.def;
   if (d.id === 'heal') player.hp = Math.min(player.maxHp, player.hp + HEAL_AMOUNT);
-  else if (d.id === 'hurt') { player.hp -= 20; flashHurt(20); triggerShake(6); }
+  else if (d.id === 'hurt') { player.hp -= 20; flashHurt(20); triggerShake(6); } // дебафф: голос НЕ играет
   else player.fx[d.id] = d.dur;
   spawnParticles(p.x, p.y, '#ffd93d');
   showToast(d.label, 'neutral');
@@ -891,6 +940,7 @@ function updateBoss(dt) {
   boss.atk -= dt;
   if (boss.atk <= 0) {
     const a = bossAttack();
+    if (a !== 'wait') bossVoice(); // голос босса при атаке
     if (!boss.jump) boss.atk = a === 'wait' ? 0.4
       : a === 'throw' ? Math.max(1.5, 2.4 - boss.n * 0.1)
       : Math.max(1.8, 3.0 - boss.n * 0.12);
@@ -918,11 +968,12 @@ function flashHurt(amount) {
   hurtFlash = Math.min(HURT_FLASH_MAX, hurtFlash + 0.08 + amount * 0.012);
   hurtFaceT = HURT_FACE_TIME;
 }
-function damagePlayer(amount, shake) {
+function damagePlayer(amount, shake, silent) {
   if (hasFx('shield')) return;
   player.hp -= amount;
   hurtFlag = true;
   flashHurt(amount);
+  if (!silent) heroVoice(); // голос героя при получении урона
   if (player.sprintCooldown <= 0) {
     player.sprintTimer = SPRINT_DURATION;
     player.sprintCooldown = SPRINT_COOLDOWN;
@@ -992,6 +1043,7 @@ function init() {
   waveEnemiesSpawned = 0; waveBreakTimer = 0;
   gameOver = false; paused = false; shakeIntensity = 0; hurtFlash = 0;
   heroIndex = 0; hurtFaceT = 0; facing = 1;
+  heroVoiceCd = 0;
   plane = null; pickups = []; boss = null;
   updateCamera();
   document.getElementById('gameover').style.display = 'none';
@@ -1159,6 +1211,7 @@ function update(dt) {
   hurtFlag = false;
   hurtFlash = Math.max(0, hurtFlash - dt * 0.7);
   hurtFaceT = Math.max(0, hurtFaceT - dt);
+  heroVoiceCd = Math.max(0, heroVoiceCd - dt);
   if (toastT > 0 && (toastT -= dt) <= 0) toastEl.style.opacity = 0;
   for (const k in player.fx) player.fx[k] = Math.max(0, player.fx[k] - dt);
 
