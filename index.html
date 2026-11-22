@@ -325,8 +325,8 @@ function resolveMove(o, ox, oy, r) {
   else { o.x = ox; o.y = oy; }
   if (blockedAt(o.x, o.y, r)) Object.assign(o, findFreeNear(o.x, o.y, r));
 }
-// ---------- Зоны, где нельзя спавнить мобов и боссов (красные) ----------
-// spawn_mask.png лежит рядом с index.html. Красный пиксель = здесь НЕ появляются мобы и боссы.
+// ---------- Зоны, где нельзя спавнить мобов (красные) ----------
+// spawn_mask.png лежит рядом с index.html. Красный пиксель = здесь НЕ появляются мобы.
 // Любой другой цвет или прозрачность = спавн разрешён. Ходить по красным зонам можно, это не стены.
 // Маска растягивается на весь мир, поэтому лучше, чтобы её размер совпадал с map.png
 // (или хотя бы пропорции были те же). Если файла нет, ограничений нет и игра работает как раньше.
@@ -340,6 +340,60 @@ let noSpawnGrid = null, nsW = 0, nsH = 0;
 spawnMaskImg.onload = () => { spawnMaskState = 'ready'; buildNoSpawnGrid(); };
 spawnMaskImg.onerror = () => { spawnMaskState = 'none'; };
 spawnMaskImg.src = SPAWN_MASK_SPRITE;
+
+// ---------- Где появляются боссы (зелёные зоны) ----------
+// map_mask2.png лежит рядом с index.html. Зелёный пиксель = здесь может появиться босс.
+// Маска растягивается на весь мир, поэтому её размер должен совпадать с map.png (или хотя бы пропорции).
+// Если файла нет или он не прочитался, боссы появляются как раньше (в углу, подальше от игрока).
+const BOSS_SPAWN_MASK_SPRITE = 'map_mask2.png';
+const DEBUG_BOSS_ZONES = false; // true — показать зелёные зоны поверх карты, чтобы проверить маску
+const BOSS_WALL_R = 14;         // радиус босса для стен (был 24, из-за него он застревал там, где мобы проходят)
+const GREEN_MIN = 150, GREEN_OTHER_MAX = 100; // какой пиксель считается зелёным
+const bossMaskImg = new Image();
+let bossMaskState = 'loading'; // 'loading' | 'ready' | 'none'
+let bossSpawnPts = null, bmW = 0, bmH = 0;
+bossMaskImg.onload = () => { bossMaskState = 'ready'; buildBossSpawnPts(); };
+bossMaskImg.onerror = () => { bossMaskState = 'none'; };
+bossMaskImg.src = BOSS_SPAWN_MASK_SPRITE;
+
+function buildBossSpawnPts() {
+  bmW = bossMaskImg.naturalWidth; bmH = bossMaskImg.naturalHeight;
+  try {
+    const c = document.createElement('canvas'); c.width = bmW; c.height = bmH;
+    const cx = c.getContext('2d', { willReadFrequently: true });
+    cx.drawImage(bossMaskImg, 0, 0);
+    const d = cx.getImageData(0, 0, bmW, bmH).data;
+    const pts = [];
+    for (let y = 0; y < bmH; y += 2) for (let x = 0; x < bmW; x += 2) {
+      const i = (y * bmW + x) * 4;
+      if (d[i + 3] > 128 && d[i + 1] >= GREEN_MIN && d[i] <= GREEN_OTHER_MAX && d[i + 2] <= GREEN_OTHER_MAX) pts.push([x, y]);
+    }
+    bossSpawnPts = pts;
+  } catch (e) { console.warn('Маска боссов не прочиталась (открыт file://? нужен сервер):', e); }
+}
+
+// точка появления босса: в зелёной зоне, не в стене, желательно достижимая и подальше от игрока
+function pickBossSpawn() {
+  if (!bossSpawnPts || !bossSpawnPts.length) return null;
+  const all = [], reachable = [];
+  for (let i = 0; i < 80; i++) {
+    const p = bossSpawnPts[Math.floor(Math.random() * bossSpawnPts.length)];
+    const x = Math.max(30, Math.min(WORLD_W - 30, (p[0] + 0.5) / bmW * WORLD_W));
+    const y = Math.max(30, Math.min(WORLD_H - 30, (p[1] + 0.5) / bmH * WORLD_H));
+    if (blockedAt(x, y, BOSS_WALL_R)) continue;
+    const c = { x, y, d: Math.hypot(x - player.x, y - player.y) };
+    all.push(c);
+    if (flowDistAt(x, y) !== -1) reachable.push(c);
+  }
+  const list = reachable.length ? reachable : all;
+  if (!list.length) { // все выбранные точки в стенах: берём любую зелёную и сдвигаем к ближайшему свободному месту
+    const p = bossSpawnPts[Math.floor(Math.random() * bossSpawnPts.length)];
+    return findFreeNear((p[0] + 0.5) / bmW * WORLD_W, (p[1] + 0.5) / bmH * WORLD_H, BOSS_WALL_R);
+  }
+  const far = list.filter(c => c.d > 700);
+  const pool = far.length ? far : [list.reduce((a, b) => (b.d > a.d ? b : a))];
+  return pool[Math.floor(Math.random() * pool.length)];
+}
 
 function buildNoSpawnGrid() {
   nsW = spawnMaskImg.naturalWidth; nsH = spawnMaskImg.naturalHeight;
@@ -364,7 +418,7 @@ function inNoSpawnZone(x, y) {
   if (mx < 0 || my < 0 || mx >= nsW || my >= nsH) return false;
   return noSpawnGrid[my * nsW + mx] === 1;
 }
-// можно ли поставить сюда моба/босса радиуса r: не стена и ни одна часть тела не в красной зоне
+// можно ли поставить сюда моба радиуса r: не стена и ни одна часть тела не в красной зоне
 function canSpawnAt(x, y, r) {
   if (blockedAt(x, y, r)) return false;
   return !(inNoSpawnZone(x, y) || inNoSpawnZone(x + r, y) || inNoSpawnZone(x - r, y) ||
@@ -557,7 +611,7 @@ function startGame() {
     document.getElementById('nameError').textContent = 'Введите имя (минимум 2 символа)';
     return;
   }
-  if (mapState === 'loading' || maskState === 'loading' || spawnMaskState === 'loading') {
+  if (mapState === 'loading' || maskState === 'loading' || spawnMaskState === 'loading' || bossMaskState === 'loading') {
     document.getElementById('nameError').textContent = 'Загружается карта, нажмите ещё раз через секунду...';
     return;
   }
@@ -724,7 +778,9 @@ function spawnBoss() {
     x: player.x < WORLD_W / 2 ? WORLD_W - 200 : 200,
     y: player.y < WORLD_H / 2 ? WORLD_H - 200 : 200
   };
-  Object.assign(boss, findSpawnNear(boss.x, boss.y, 30)); // не в стене и не в красной зоне
+  const sp = pickBossSpawn(); // только зелёные зоны из map_mask2.png
+  if (sp) { boss.x = sp.x; boss.y = sp.y; }
+  else Object.assign(boss, findSpawnNear(boss.x, boss.y, 30)); // нет маски: как раньше
   showToast('БОСС: ' + def.name + '!', false);
   sfxBoom();
 }
@@ -817,7 +873,7 @@ function updateBoss(dt) {
       if (Math.hypot(player.x - boss.x, player.y - boss.y) < 60) damagePlayer(18, 12);
       triggerShake(14);
       sfxBoom();
-      Object.assign(boss, findFreeNear(boss.x, boss.y, 28));
+      Object.assign(boss, findFreeNear(boss.x, boss.y, BOSS_WALL_R));
       boss.jump = null;
       boss.atk = 2.2;
     }
@@ -830,7 +886,7 @@ function updateBoss(dt) {
     const mAng = steerAngle(boss, ang);
     boss.x += Math.cos(mAng) * boss.speed * dt;
     boss.y += Math.sin(mAng) * boss.speed * dt;
-    resolveMove(boss, ox, oy, 24);
+    resolveMove(boss, ox, oy, BOSS_WALL_R);
   }
   boss.atk -= dt;
   if (boss.atk <= 0) {
@@ -1469,6 +1525,14 @@ function draw() {
     ctx.drawImage(spawnMaskImg, 0, 0, WORLD_W, WORLD_H);
     ctx.globalAlpha = 1;
   }
+  if (DEBUG_BOSS_ZONES && bossMaskState === 'ready') { // зелёные зоны босса подсвечиваются поверх карты
+    ctx.globalCompositeOperation = 'multiply';
+    ctx.globalAlpha = 0.6;
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(bossMaskImg, 0, 0, WORLD_W, WORLD_H);
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
+  }
 
   // звуковые волны
   for (const s of shockwaves) {
@@ -1551,35 +1615,35 @@ function draw() {
   }
 
   if (plane) {
-  // тень на земле
-  ctx.fillStyle = 'rgba(0,0,0,0.35)';
-  ctx.beginPath(); ctx.ellipse(plane.x, plane.y + 14, 28, 12, 0, 0, Math.PI * 2); ctx.fill();
+    // тень на земле
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.beginPath(); ctx.ellipse(plane.x, plane.y + 14, 28, 12, 0, 0, Math.PI * 2); ctx.fill();
 
-  const heading = Math.atan2(plane.endY - plane.startY, plane.endX - plane.startX);
-  if (planeSprite.ok) {
-    // летит влево — зеркалим, чтобы птичка не оказалась вверх ногами
-    const cosH = Math.cos(heading);
-    const flip = cosH < -0.01;
-    const a = flip ? Math.atan2(Math.sin(heading), -cosH) : heading;
-    const w = PLANE_DRAW_SIZE, h = PLANE_DRAW_SIZE * planeSprite.img.naturalHeight / planeSprite.img.naturalWidth;
-    ctx.save();
-    ctx.translate(plane.x, plane.y);
-    if (flip) ctx.scale(-1, 1);
-    ctx.rotate(a - BIRD_BASE_ANGLE);
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'high';
-    ctx.drawImage(planeSprite.img, -w / 2, -h / 2, w, h);
-    ctx.restore();
-  } else {
-    // запасной вариант: старый самолётик, если картинка не загрузилась
-    ctx.save();
-    ctx.translate(plane.x, plane.y);
-    ctx.rotate(heading);
-    ctx.fillStyle = '#cccccc';
-    ctx.beginPath(); ctx.moveTo(20, 0); ctx.lineTo(-16, -10); ctx.lineTo(-8, 0); ctx.lineTo(-16, 10); ctx.closePath(); ctx.fill();
-    ctx.restore();
+    const heading = Math.atan2(plane.endY - plane.startY, plane.endX - plane.startX);
+    if (planeSprite.ok) {
+      // летит влево — зеркалим, чтобы птичка не оказалась вверх ногами
+      const cosH = Math.cos(heading);
+      const flip = cosH < -0.01;
+      const a = flip ? Math.atan2(Math.sin(heading), -cosH) : heading;
+      const w = PLANE_DRAW_SIZE, h = PLANE_DRAW_SIZE * planeSprite.img.naturalHeight / planeSprite.img.naturalWidth;
+      ctx.save();
+      ctx.translate(plane.x, plane.y);
+      if (flip) ctx.scale(-1, 1);
+      ctx.rotate(a - BIRD_BASE_ANGLE);
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(planeSprite.img, -w / 2, -h / 2, w, h);
+      ctx.restore();
+    } else {
+      // запасной вариант: старый самолётик, если картинка не загрузилась
+      ctx.save();
+      ctx.translate(plane.x, plane.y);
+      ctx.rotate(heading);
+      ctx.fillStyle = '#cccccc';
+      ctx.beginPath(); ctx.moveTo(20, 0); ctx.lineTo(-16, -10); ctx.lineTo(-8, 0); ctx.lineTo(-16, 10); ctx.closePath(); ctx.fill();
+      ctx.restore();
+    }
   }
-}
 
   // игрок: герой-моделька, а если картинки не загрузились — кубик
   if (!drawHero()) {
