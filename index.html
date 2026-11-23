@@ -94,10 +94,17 @@
       </div>
     </div>
     <div class="settings-row">
-      <label for="sfxSlider">Звуки и голоса</label>
+      <label for="sfxSlider">Звуки</label>
       <div class="volume-control">
         <input type="range" id="sfxSlider" min="0" max="100" value="50">
         <span id="sfxValue">50%</span>
+      </div>
+    </div>
+    <div class="settings-row">
+      <label for="voiceSlider">Голоса</label>
+      <div class="volume-control">
+        <input type="range" id="voiceSlider" min="0" max="100" value="50">
+        <span id="voiceValue">50%</span>
       </div>
     </div>
     <div class="settings-row">
@@ -713,7 +720,8 @@ nameInput.addEventListener('keydown', e => { if (e.key === 'Enter') startGame();
 let audioCtx = null;
 let soundEnabled = true;
 let musicVolume = 0.3; // громкость музыки 0..1 (ползунок в настройках)
-let sfxVolume = 0.5;   // громкость звуков и голосов 0..1 (ползунок в настройках)
+let sfxVolume = 0.5;   // громкость звуков (выстрелы и т.п.) 0..1 (ползунок в настройках)
+let voiceVolume = 0.5; // громкость голосов героев и боссов 0..1 (ползунок в настройках)
 
 // ---------- Фоновая музыка ----------
 const musicTracks = [
@@ -1240,19 +1248,22 @@ const musicSlider = document.getElementById('musicSlider');
 const musicValue = document.getElementById('musicValue');
 const sfxSlider = document.getElementById('sfxSlider');
 const sfxValue = document.getElementById('sfxValue');
+const voiceSlider = document.getElementById('voiceSlider');
+const voiceValue = document.getElementById('voiceValue');
 const soundToggle = document.getElementById('soundToggle');
 
 function applyAudioSettings() {
   music.volume = soundEnabled ? musicVolume : 0;
   musicValue.textContent = Math.round(musicVolume * 100) + '%';
   sfxValue.textContent = Math.round(sfxVolume * 100) + '%';
+  voiceValue.textContent = Math.round(voiceVolume * 100) + '%';
 
   // Обновляем громкость уже загруженных голосовых записей.
   for (const hero of HEROES) {
-    for (const audio of (hero.voiceSounds || [])) audio.volume = soundEnabled ? sfxVolume : 0;
+    for (const audio of (hero.voiceSounds || [])) audio.volume = soundEnabled ? voiceVolume : 0;
   }
   for (const group of BOSS_VOICES) {
-    for (const audio of group) audio.volume = soundEnabled ? sfxVolume : 0;
+    for (const audio of group) audio.volume = soundEnabled ? voiceVolume : 0;
   }
 }
 
@@ -1266,8 +1277,10 @@ function loadVolume(key, def) {
 }
 musicVolume = loadVolume('musicVolume', 0.3);
 sfxVolume = loadVolume('sfxVolume', 0.5);
+voiceVolume = loadVolume('voiceVolume', 0.5);
 musicSlider.value = Math.round(musicVolume * 100);
 sfxSlider.value = Math.round(sfxVolume * 100);
+voiceSlider.value = Math.round(voiceVolume * 100);
 applyAudioSettings();
 
 musicSlider.addEventListener('input', e => {
@@ -1278,6 +1291,12 @@ musicSlider.addEventListener('input', e => {
 sfxSlider.addEventListener('input', e => {
   sfxVolume = Number(e.target.value) / 100;
   try { localStorage.setItem('sfxVolume', String(sfxVolume)); } catch (err) {}
+  applyAudioSettings();
+});
+
+voiceSlider.addEventListener('input', e => {
+  voiceVolume = Number(e.target.value) / 100;
+  try { localStorage.setItem('voiceVolume', String(voiceVolume)); } catch (err) {}
   applyAudioSettings();
 });
 
