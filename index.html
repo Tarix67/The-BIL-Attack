@@ -233,7 +233,7 @@ const HEROES = [
   { name: '10th grade', calm: 'Жангир веселый.png', hurt: 'Жангир грустный.png', cols: 1, rows: 1, fps: 6,
     voices: ['Жангир-10.mp3'] },
   { name: '11th grade', calm: 'Адлет аби веселый.png', hurt: 'Адлет аби грустный.png', cols: 1, rows: 1, fps: 6,
-    voices: ['Адлет аби-11.mp3'] },
+    voices: ['Адлет аби 11.mp3'] },
   { name: 'Abi', calm: 'Сулейман аби веселый.png', hurt: 'Сулейман аби грустный.png', cols: 1, rows: 1, fps: 6,
     voices: ['hero6_1.mp3'] },
   { name: 'Agay', calm: 'Аян агай веселый.png', hurt: 'Аян агай грустный.png', cols: 1, rows: 1, fps: 6,
@@ -289,7 +289,7 @@ function loadVoices(files) {
 for (const h of HEROES) h.voiceSounds = loadVoices(h.voices);
 // Звук, когда босс атакует. По порядку BOSS_DEFS: Асанали, Шухрат, Айбар, Ахмет
 const BOSS_VOICES = [
-  loadVoices(['boss1.mp3']),
+  loadVoices(['Асанали-аби-голос.mp3']),
   loadVoices(['boss2.mp3']),
   loadVoices(['boss3.mp3']),
   loadVoices(['boss4.mp3'])
