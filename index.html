@@ -26,9 +26,6 @@
   #volumeSlider { width:130px; accent-color:#4ecdc4; cursor:pointer; }
   #volumeValue { min-width:38px; text-align:right; font-size:13px; }
 
-  .theme-buttons { display:flex; gap:6px; }
-  .theme-buttons button { margin:0; padding:8px 10px; font-size:13px; width:auto; }
-  .theme-buttons button.active { outline:3px solid #ffd93d; }
   #gameover { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); text-align:center; display:none; text-shadow:2px 2px 0 #000; z-index:10; width:80%; }
   #gameover h1 { color:#e94560; font-size:clamp(28px,8vw,40px); margin-bottom:10px; }
   #gameover p { font-size:clamp(16px,4vw,20px); }
@@ -708,6 +705,7 @@ nameInput.addEventListener('keydown', e => { if (e.key === 'Enter') startGame();
 // ---------- Звук ----------
 let audioCtx = null;
 let soundEnabled = true;
+let masterVolume = 0.5; // общая громкость 0..1 (ползунок в настройках)
 
 // ---------- Фоновая музыка ----------
 const musicTracks = [
@@ -787,8 +785,7 @@ function showLevelUp(name) {
 
 // ---------- Темы ----------
 const THEMES = {
-  desert: { label: 'Пустыня', enemyLabel: 'Монстр',  playerLabel: 'Солдат',  playerColor: '#4ecdc4', enemyHueBase: 350, bgColor: '#0d1117', gridColor: '#1e2030', wallColor: '#e94560' },
-  office: { label: 'Офис',    enemyLabel: 'Коллега', playerLabel: 'Новичок', playerColor: '#f4a261', enemyHueBase: 210, bgColor: '#1a1a2e', gridColor: '#2a2a44', wallColor: '#457b9d' }
+  desert: { label: 'Пустыня', enemyLabel: 'Монстр',  playerLabel: 'Солдат',  playerColor: '#4ecdc4', enemyHueBase: 350, bgColor: '#0d1117', gridColor: '#1e2030', wallColor: '#e94560' }
 };
 let currentTheme = 'desert';
 
@@ -796,9 +793,6 @@ function switchTheme(name) {
   if (!THEMES[name]) return;
   currentTheme = name;
   canvas.style.background = THEMES[name].bgColor;
-  document.querySelectorAll('#themeButtons button').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.theme === name);
-  });
 }
 
 // ---------- Баффы и дебаффы (каждый временный эффект длится ~10 секунд) ----------
@@ -1233,9 +1227,6 @@ document.getElementById('openSettingsBtn').addEventListener('click', () => {
 document.getElementById('backToPauseBtn').addEventListener('click', () => {
   settingsOverlay.style.display = 'none';
   pauseOverlay.style.display = 'flex';
-});
-document.querySelectorAll('#themeButtons button').forEach(btn => {
-  btn.addEventListener('click', () => switchTheme(btn.dataset.theme));
 });
 const volumeSlider = document.getElementById('volumeSlider');
 const volumeValue = document.getElementById('volumeValue');
