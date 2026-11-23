@@ -22,6 +22,10 @@
   .panel button { display:block; width:100%; background:#4ecdc4; color:#0d1117; border:none; padding:12px; margin:8px 0; font-size:16px; cursor:pointer; font-family:inherit; border-radius:6px; font-weight:bold; touch-action:manipulation; }
   .panel button.secondary { background:#2a2a44; color:#eee; }
   .settings-row { display:flex; justify-content:space-between; align-items:center; margin:14px 0; gap:10px; }
+  .volume-control { display:flex; align-items:center; gap:10px; width:170px; }
+  #volumeSlider { width:130px; accent-color:#4ecdc4; cursor:pointer; }
+  #volumeValue { min-width:38px; text-align:right; font-size:13px; }
+
   .theme-buttons { display:flex; gap:6px; }
   .theme-buttons button { margin:0; padding:8px 10px; font-size:13px; width:auto; }
   .theme-buttons button.active { outline:3px solid #ffd93d; }
@@ -86,10 +90,10 @@
   <div class="panel">
     <h2>Настройки</h2>
     <div class="settings-row">
-      <span>Стилистика</span>
-      <div class="theme-buttons" id="themeButtons">
-        <button data-theme="desert">Пустыня</button>
-        <button data-theme="office">Офис</button>
+      <label for="volumeSlider">Громкость</label>
+      <div class="volume-control">
+        <input type="range" id="volumeSlider" min="0" max="100" value="50">
+        <span id="volumeValue">50%</span>
       </div>
     </div>
     <div class="settings-row">
@@ -715,7 +719,7 @@ const musicTracks = [
 let currentTrack = 0;
 
 const music = new Audio();
-music.volume = 0.3; // громкость от 0 до 1
+music.volume = masterVolume * 0.6; // музыка регулируется общим ползунком
 
 function playMusic() {
   if (!soundEnabled) return;
@@ -746,7 +750,7 @@ function beep(freq, duration, type, volume) {
   const gain = audioCtx.createGain();
   osc.type = type || 'square';
   osc.frequency.value = freq;
-  gain.gain.value = volume != null ? volume : 0.12;
+  gain.gain.value = (volume != null ? volume : 0.12) * masterVolume;
   osc.connect(gain); gain.connect(audioCtx.destination);
   const now = audioCtx.currentTime;
   osc.start(now);
@@ -1233,8 +1237,38 @@ document.getElementById('backToPauseBtn').addEventListener('click', () => {
 document.querySelectorAll('#themeButtons button').forEach(btn => {
   btn.addEventListener('click', () => switchTheme(btn.dataset.theme));
 });
-document.getElementById('soundToggle').addEventListener('change', e => {
+const volumeSlider = document.getElementById('volumeSlider');
+const volumeValue = document.getElementById('volumeValue');
+const soundToggle = document.getElementById('soundToggle');
+
+function applyAudioSettings() {
+  music.volume = soundEnabled ? masterVolume * 0.6 : 0;
+  volumeValue.textContent = Math.round(masterVolume * 100) + '%';
+
+  // Обновляем громкость уже загруженных голосовых записей.
+  for (const hero of HEROES) {
+    for (const audio of (hero.voiceSounds || [])) audio.volume = soundEnabled ? masterVolume : 0;
+  }
+  for (const group of BOSS_VOICES) {
+    for (const audio of group) audio.volume = soundEnabled ? masterVolume : 0;
+  }
+}
+
+try {
+  masterVolume = Math.max(0, Math.min(1, Number(localStorage.getItem('gameVolume')) || 0.5));
+} catch (e) {}
+volumeSlider.value = Math.round(masterVolume * 100);
+applyAudioSettings();
+
+volumeSlider.addEventListener('input', e => {
+  masterVolume = Number(e.target.value) / 100;
+  try { localStorage.setItem('gameVolume', String(masterVolume)); } catch (err) {}
+  applyAudioSettings();
+});
+
+soundToggle.addEventListener('change', e => {
   soundEnabled = e.target.checked;
+  applyAudioSettings();
 
   if (soundEnabled && started && !paused) {
     music.play().catch(() => {});
