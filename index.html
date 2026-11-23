@@ -54,7 +54,7 @@
     18% { opacity:1; transform:scale(1.12) rotate(3deg); }
     30% { transform:scale(1) rotate(0); }
     82% { opacity:1; }
-    100% { opacity:1; transform:scale(1) translateY(0); }
+    100% { opacity:0; transform:scale(.92) translateY(-18px); }
   }
 </style>
 </head>
@@ -67,8 +67,7 @@
 </div>
 <div id="fx"></div>
 <div id="toast"></div>
-<div id="levelup"><b>LEVEL UP!</b><small id="levelupName"></small></div>
-<div id="rareRewardOverlay" role="dialog" aria-modal="true" aria-label="Редкая награда"><div id="rareRewardCard"><img id="rareRewardImage" src="rare_reward.png" alt="Редкая награда"><button id="rareRewardClose" type="button" aria-label="Закрыть">×</button></div></div>
+<div id="levelup"><b>LEVEL UP!</b><small id="levelupName"></small></div>\n<div id="rareRewardOverlay" role="dialog" aria-modal="true" aria-label="Редкая награда"><div id="rareRewardCard"><img id="rareRewardImage" src="rare_reward.png" alt="Редкая награда"><button id="rareRewardClose" type="button" aria-label="Закрыть">×</button></div></div>
 
 <button id="pauseBtn">⏸</button>
 
@@ -173,7 +172,7 @@ const BOSS_WAVE_TIME = 75;  // секунд на волну с боссом
 const MAX_ENEMIES = 80;     // предел монстров на карте, чтобы игра не тормозила
 const MAX_GUNS = 4;
 const ENEMY_DROP_CHANCE = 0.05;
-const RARE_DROP_CHANCE = 1 / 750; // отдельный шанс редкого ящика с каждого убитого моба
+const RARE_DROP_CHANCE = 1 / 750; // отдельный шанс редкого ящика с каждого убитого моба\n
 const RARE_BUFF_DURATION = 30;
 const VIEW_TARGET = 600; // сколько мировых единиц должно помещаться по МЕНЬШЕЙ стороне экрана
 const MIN_ZOOM = 0.45;
@@ -235,7 +234,7 @@ const HEROES = [
   { name: '10th grade', calm: 'Жангир веселый.png', hurt: 'Жангир грустный.png', cols: 1, rows: 1, fps: 6,
     voices: ['Жангир-10.mp3'] },
   { name: '11th grade', calm: 'Адлет аби веселый.png', hurt: 'Адлет аби грустный.png', cols: 1, rows: 1, fps: 6,
-    voices: ['Адлет аби-11.mp3'] },
+    voices: ['Адлет аби 11.mp3'] },
   { name: 'Abi', calm: 'Сулейман аби веселый.png', hurt: 'Сулейман аби грустный.png', cols: 1, rows: 1, fps: 6,
     voices: ['hero6_1.mp3'] },
   { name: 'Agay', calm: 'Аян агай веселый.png', hurt: 'Аян агай грустный.png', cols: 1, rows: 1, fps: 6,
@@ -291,7 +290,7 @@ function loadVoices(files) {
 for (const h of HEROES) h.voiceSounds = loadVoices(h.voices);
 // Звук, когда босс атакует. По порядку BOSS_DEFS: Асанали, Шухрат, Айбар, Ахмет
 const BOSS_VOICES = [
-  loadVoices(['boss1.mp3']),
+  loadVoices(['Асанали-аби-голос.mp3']),
   loadVoices(['boss2.mp3']),
   loadVoices(['boss3.mp3']),
   loadVoices(['boss4.mp3'])
@@ -709,7 +708,8 @@ let soundEnabled = true;
 // ---------- Фоновая музыка ----------
 const musicTracks = [
   'music1.mp3',
-  'music2.mp3'
+  'music2.mp3',
+  'music3.mp3'
 ];
 
 let currentTrack = 0;
