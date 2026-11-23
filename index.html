@@ -32,6 +32,30 @@
   #submitStatus { font-size:clamp(13px,3.5vw,16px) !important; min-height:1.4em; color:#ffd93d; }
   #nameInput { width:100%; box-sizing:border-box; padding:12px; margin:10px 0 4px; font-size:18px; font-family:inherit; text-align:center; border-radius:6px; border:2px solid #4ecdc4; background:#0d1117; color:#fff; -webkit-user-select:text; user-select:text; }
   #nameError { color:#e94560; font-size:13px; min-height:1.2em; margin:0 0 6px; }
+  #rareRewardOverlay {
+    position:fixed; inset:0; z-index:30; display:none; align-items:center;
+    justify-content:center; pointer-events:auto; cursor:default;
+    background:rgba(0,0,0,.82);
+  }
+  #rareRewardCard { position:relative; display:flex; align-items:center; justify-content:center; max-width:90vw; max-height:86vh; }
+  #rareRewardOverlay img {
+    display:block; max-width:min(82vw,560px); max-height:75vh; object-fit:contain;
+    filter:drop-shadow(0 0 22px #fff) drop-shadow(0 0 48px #ffe66d);
+    animation:rareRewardPop .55s cubic-bezier(.2,.8,.2,1) both;
+  }
+  #rareRewardClose {
+    position:absolute; top:-18px; right:-18px; z-index:2; width:42px; height:42px;
+    border:2px solid #fff; border-radius:50%; background:#e94560; color:#fff;
+    font:bold 27px/1 'Courier New',monospace; cursor:pointer; touch-action:manipulation;
+    box-shadow:0 0 18px #fff, 0 0 30px #ffe66d;
+  }
+  @keyframes rareRewardPop {
+    0% { opacity:0; transform:scale(.25) rotate(-12deg); }
+    18% { opacity:1; transform:scale(1.12) rotate(3deg); }
+    30% { transform:scale(1) rotate(0); }
+    82% { opacity:1; }
+    100% { opacity:0; transform:scale(.92) translateY(-18px); }
+  }
 </style>
 </head>
 <body>
@@ -43,7 +67,7 @@
 </div>
 <div id="fx"></div>
 <div id="toast"></div>
-<div id="levelup"><b>LEVEL UP!</b><small id="levelupName"></small></div>
+<div id="levelup"><b>LEVEL UP!</b><small id="levelupName"></small></div>\n<div id="rareRewardOverlay" role="dialog" aria-modal="true" aria-label="Редкая награда"><div id="rareRewardCard"><img id="rareRewardImage" src="rare_reward.png" alt="Редкая награда"><button id="rareRewardClose" type="button" aria-label="Закрыть">×</button></div></div>
 
 <button id="pauseBtn">⏸</button>
 
@@ -148,6 +172,7 @@ const BOSS_WAVE_TIME = 75;  // секунд на волну с боссом
 const MAX_ENEMIES = 80;     // предел монстров на карте, чтобы игра не тормозила
 const MAX_GUNS = 4;
 const ENEMY_DROP_CHANCE = 0.05;
+const RARE_DROP_CHANCE = 1 / 750; // отдельный шанс редкого ящика с каждого убитого моба\nconst RARE_BUFF_DURATION = 30;
 const VIEW_TARGET = 600; // сколько мировых единиц должно помещаться по МЕНЬШЕЙ стороне экрана
 const MIN_ZOOM = 0.45;
 const AUTO_RANGE = 380;  // дальность, на которой игрок видит цели и стреляет
@@ -800,7 +825,45 @@ function makeMedkit(x, y) {
   return { x, y, good: true, def: HEAL_DEF, bobPhase: 0, life: CRATE_LIFE, known: true };
 }
 
+// Особый ящик: все положительные временные эффекты сразу на 30 секунд.
+function makeRareCrate(x, y) {
+  return { x, y, rare: true, bobPhase: 0, life: CRATE_LIFE };
+}
+
+const RARE_REWARD_IMAGE = 'rare_reward.png'; // замени на точное имя файла своей картинки
+function showRareReward() {
+  const overlay = document.getElementById('rareRewardOverlay');
+  const img = document.getElementById('rareRewardImage');
+  img.src = RARE_REWARD_IMAGE;
+  overlay.style.display = 'flex';
+  // Полностью останавливаем игровой мир, пока игрок не закроет оповещение.
+  paused = true;
+  music.pause();
+  img.style.animation = 'none';
+  void img.offsetWidth;
+  img.style.animation = '';
+}
+
+function closeRareReward() {
+  document.getElementById('rareRewardOverlay').style.display = 'none';
+  paused = false;
+  if (soundEnabled && started && !gameOver) music.play().catch(() => {});
+}
+
+document.getElementById('rareRewardClose').addEventListener('click', closeRareReward);
+
 function collectPickup(p) {
+  if (p.rare) {
+    player.fx.rate_up = RARE_BUFF_DURATION;
+    player.fx.speed_up = RARE_BUFF_DURATION;
+    player.fx.dmg_up = RARE_BUFF_DURATION;
+    player.fx.shield = RARE_BUFF_DURATION;
+    for (let i = 0; i < 24; i++) spawnParticles(p.x, p.y, '#fff6a5');
+    showToast('РЕДКАЯ НАГРАДА! ВСЕ БАФФЫ НА 30 СЕКУНД', 'neutral');
+    showRareReward();
+    sfxPickup();
+    return;
+  }
   const d = p.def;
   if (d.id === 'heal') player.hp = Math.min(player.maxHp, player.hp + HEAL_AMOUNT);
   else if (d.id === 'hurt') { player.hp -= 20; flashHurt(20); triggerShake(6); } // дебафф: голос НЕ играет
@@ -977,7 +1040,7 @@ function updateBoss(dt) {
 function killBoss() {
   for (let i = 0; i < 6; i++) spawnParticles(boss.x, boss.y, boss.def.color);
   player.guns = Math.min(MAX_GUNS, player.guns + 1);
-  heroIndex = (heroIndex + 1) % HEROES.length; // новый герой
+  heroIndex = Math.min(heroIndex + 1, HEROES.length - 1); // последний герой (Тимур агай) больше не сбрасывается
   showLevelUp(HEROES[heroIndex].name);
   pickups.push(makeCrate(boss.x, boss.y, true));
   // очки за босса не начисляем: счёт зависит только от времени (так работает проверка лидерборда)
@@ -1369,6 +1432,30 @@ function update(dt) {
     if (!e.jump) resolveMove(e, ox, oy, e.size * 0.4);
   }
 
+  // Стрелки держат дистанцию друг от друга и не собираются в одну точку.
+  const shooters = enemies.filter(e => e.type === 'shooter' && !e.jump);
+  for (let i = 0; i < shooters.length; i++) {
+    for (let j = i + 1; j < shooters.length; j++) {
+      const a = shooters[i], b = shooters[j];
+      let dx = b.x - a.x, dy = b.y - a.y;
+      let dist = Math.hypot(dx, dy);
+      const minDist = Math.max(a.size, b.size) * 1.15;
+      if (dist >= minDist) continue;
+      if (dist < 0.001) {
+        const angle = Math.random() * Math.PI * 2;
+        dx = Math.cos(angle); dy = Math.sin(angle); dist = 1;
+      }
+      const push = (minDist - dist) * 0.5;
+      const ax = a.x, ay = a.y, bx = b.x, by = b.y;
+      a.x -= dx / dist * push;
+      a.y -= dy / dist * push;
+      b.x += dx / dist * push;
+      b.y += dy / dist * push;
+      resolveMove(a, ax, ay, a.size * 0.4);
+      resolveMove(b, bx, by, b.size * 0.4);
+    }
+  }
+
   // --- босс ---
   if (boss) updateBoss(dt);
 
@@ -1414,7 +1501,8 @@ function update(dt) {
         spawnParticles(e.x, e.y, e.color);
         sfxHit();
         if (e.hp <= 0) {
-          if (Math.random() < ENEMY_DROP_CHANCE) pickups.push(makeCrate(e.x, e.y));
+          if (Math.random() < RARE_DROP_CHANCE) pickups.push(makeRareCrate(e.x, e.y));
+          else if (Math.random() < ENEMY_DROP_CHANCE) pickups.push(makeCrate(e.x, e.y));
           enemies.splice(i, 1);
           sfxDeath();
         }
@@ -1656,6 +1744,32 @@ function draw() {
     const bob = Math.sin(p.bobPhase) * 4;
     ctx.save();
     ctx.translate(p.x, p.y + bob);
+    if (p.rare) {
+      const pulse = 1 + Math.sin(p.bobPhase * 2.5) * 0.12;
+      const glow = ctx.createRadialGradient(0, 0, 2, 0, 0, 42 * pulse);
+      glow.addColorStop(0, 'rgba(255,255,255,0.95)');
+      glow.addColorStop(0.25, 'rgba(255,245,150,0.75)');
+      glow.addColorStop(1, 'rgba(255,210,40,0)');
+      ctx.fillStyle = glow;
+      ctx.beginPath(); ctx.arc(0, 0, 42 * pulse, 0, Math.PI * 2); ctx.fill();
+      ctx.save();
+      ctx.rotate(Math.PI / 4);
+      ctx.shadowColor = '#fff4a3';
+      ctx.shadowBlur = 38;
+      const size = 23 * pulse;
+      const grad = ctx.createLinearGradient(-size, -size, size, size);
+      grad.addColorStop(0, '#ffffff');
+      grad.addColorStop(0.45, '#fff7a8');
+      grad.addColorStop(1, '#ffb700');
+      ctx.fillStyle = grad;
+      ctx.fillRect(-size / 2, -size / 2, size, size);
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 3;
+      ctx.strokeRect(-size / 2, -size / 2, size, size);
+      ctx.restore();
+      ctx.restore();
+      continue;
+    }
     if (p.known && medkitReady) {
       ctx.imageSmoothingEnabled = false; // чтобы пиксель-арт не размывался
       const fw = medkitImg.naturalWidth / MEDKIT_COLS, fh = medkitImg.naturalHeight / MEDKIT_ROWS;
