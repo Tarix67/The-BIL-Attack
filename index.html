@@ -226,7 +226,7 @@ const planeSprite = loadSprite(PLANE_SPRITE);
 // Если картинка не загрузилась, вместо героя рисуется кубик, и игра не ломается.
 const HEROES = [
   { name: '7th grade', calm: 'Жанторе Веселый.png', hurt: 'Жанторе грустный.png', cols: 1, rows: 1, fps: 6,
-    voices: ['hero1_1.mp3'] },
+    voices: ['Жанторе-7.mp3'] },
   { name: '8th grade', calm: 'Абылай веселый.png', hurt: 'Абылай грустный.png', cols: 1, rows: 1, fps: 6,
     voices: ['Абылай-8.mp3'] },
   { name: '9th grade', calm: 'Ахмет(9) веселый.png', hurt: 'Ахмет(9) грустный.png', cols: 1, rows: 1, fps: 6,
@@ -236,7 +236,7 @@ const HEROES = [
   { name: '11th grade', calm: 'Адлет аби веселый.png', hurt: 'Адлет аби грустный.png', cols: 1, rows: 1, fps: 6,
     voices: ['Адлет аби 11.mp3'] },
   { name: 'Abi', calm: 'Сулейман аби веселый.png', hurt: 'Сулейман аби грустный.png', cols: 1, rows: 1, fps: 6,
-    voices: ['hero6_1.mp3'] },
+    voices: ['Сулейман аби голос2.mp3'] },
   { name: 'Agay', calm: 'Аян агай веселый.png', hurt: 'Аян агай грустный.png', cols: 1, rows: 1, fps: 6,
     voices: ['hero7_1.mp3'] },
   { name: 'Teacher from Jupiter', calm: 'Тимур агай просто.png', hurt: 'Тимур агай злой.png', cols: 1, rows: 1, fps: 6,
@@ -293,7 +293,7 @@ const BOSS_VOICES = [
   loadVoices(['Асанали-аби-голос.mp3', 'Асанали-аби-голос2.mp3']),
   loadVoices(['boss2.mp3']),
   loadVoices(['Айбар-агай-голос1.mp3', 'Айбар-агай-голос2.mp3']),
-  loadVoices(['boss4.mp3'])
+  loadVoices(['Ахмет агай голос1.mp3', 'Ахмет агай голос2.mp3'])
 ];
 const VOICE_COOLDOWN = 0.8; // герой не кричит чаще, чем раз в столько секунд (урон идёт каждый кадр)
 let heroVoiceCd = 0;
