@@ -290,9 +290,9 @@ function loadVoices(files) {
 for (const h of HEROES) h.voiceSounds = loadVoices(h.voices);
 // Звук, когда босс атакует. По порядку BOSS_DEFS: Асанали, Шухрат, Айбар, Ахмет
 const BOSS_VOICES = [
-  loadVoices(['Асанали-аби-голос.mp3']),
+  loadVoices(['Асанали-аби-голос.mp3', 'Асанали-аби-голос2.mp3']),
   loadVoices(['boss2.mp3']),
-  loadVoices(['boss3.mp3']),
+  loadVoices(['Айбар-агай-голос1.mp3', 'Айбар-агай-голос2.mp3']),
   loadVoices(['boss4.mp3'])
 ];
 const VOICE_COOLDOWN = 0.8; // герой не кричит чаще, чем раз в столько секунд (урон идёт каждый кадр)
